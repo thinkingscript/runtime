@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"fmt"
@@ -15,11 +15,11 @@ var (
 )
 
 var cacheCmd = &cobra.Command{
-	Use:   "cache [script]",
-	Short: "Manage per-script cache directories",
-	Long:  "Print or clear cache directories used to store approval decisions and script metadata.",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runCache,
+	Use:          "cache [script]",
+	Short:        "Manage per-script cache directories",
+	Long:         "Print or clear cache directories used to store approval decisions and script metadata.",
+	Args:         cobra.MaximumNArgs(1),
+	RunE:         runCache,
 	SilenceUsage: true,
 }
 

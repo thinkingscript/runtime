@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"context"
@@ -27,7 +27,7 @@ var rootCmd = &cobra.Command{
 	SilenceUsage: true,
 }
 
-func Execute(ctx context.Context) {
+func execute(ctx context.Context) {
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		os.Exit(1)
 	}
@@ -35,7 +35,6 @@ func Execute(ctx context.Context) {
 
 func init() {
 	rootCmd.Flags().SetInterspersed(false)
-	rootCmd.AddCommand(cacheCmd)
 }
 
 func runScript(cmd *cobra.Command, args []string) error {

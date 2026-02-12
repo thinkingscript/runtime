@@ -2,24 +2,31 @@
 
 ## Project Overview
 
-A Go CLI (`think`) that acts as a shebang interpreter for natural language scripts. Users write `.thought` files with `#!/usr/bin/env think`, and the CLI sends the prompt to an LLM which uses tools to accomplish the task. Repo: `thinkingscript/cli`.
+A Go CLI with two binaries:
+- **`think`** — shebang interpreter for natural language `.thought` scripts. Users write files with `#!/usr/bin/env think`, and the CLI sends the prompt to an LLM which uses tools to accomplish the task.
+- **`thought`** — management tool for cache operations and building `.thought` scripts.
+
+Repo: `thinkingscript/cli`.
 
 ## Architecture
 
 ```
-main.go              → cmd.Execute()
-cmd/root.go          → Cobra root: parse script, resolve config, run agent loop
-cmd/cache.go         → `think cache` subcommand
-internal/agent/      → Core agent loop (provider-agnostic)
-internal/provider/   → Provider interface + Anthropic adapter
-internal/config/     → Home dir, config.yaml, agents, fingerprinting
-internal/script/     → Script parser (shebang + frontmatter + prompt)
-internal/tools/      → Tool registry + implementations (command, env, stdio, arguments)
-internal/approval/   → Charm huh approval prompts + persistence + pattern matching
-internal/arguments/  → Named argument store (session-scoped, used by tools + approval)
+cmd/think/main.go        → Signal handling, calls execute()
+cmd/think/root.go        → Cobra root: parse script, resolve config, run agent loop
+cmd/thought/main.go      → Signal handling, calls execute()
+cmd/thought/root.go      → Cobra root: container for subcommands
+cmd/thought/cache.go     → `thought cache` subcommand
+cmd/thought/build.go     → `thought build` subcommand
+internal/agent/          → Core agent loop (provider-agnostic)
+internal/provider/       → Provider interface + Anthropic adapter
+internal/config/         → Home dir, config.yaml, agents, fingerprinting
+internal/script/         → Script parser (shebang + frontmatter + prompt)
+internal/tools/          → Tool registry + implementations (command, env, stdio, arguments)
+internal/approval/       → Charm huh approval prompts + persistence + pattern matching
+internal/arguments/      → Named argument store (session-scoped, used by tools + approval)
 ```
 
-### Wiring (cmd/root.go)
+### Wiring (cmd/think/root.go)
 
 Everything is wired in `runScript()`:
 1. `arguments.NewStore()` — shared mutable state for named arguments
@@ -59,7 +66,7 @@ When modifying the system prompt, be direct and explicit — especially for smal
 - **Provider interface**: Agent loop is decoupled from any specific LLM SDK.
 - **Keep primitives simple**: Small, focused tools that stack on each other. Don't over-architect.
 - **Approval is king**: Every tool that has side effects or reads sensitive data goes through the approver. Even `set_argument` requires approval so the user sees every assignment.
-- **Binary is `think`**, scripts are `.thought` files, shebangs are `#!/usr/bin/env think`.
+- **`think` is the interpreter**, **`thought` is the management tool**. Scripts are `.thought` files, shebangs are `#!/usr/bin/env think`.
 - Config precedence: env vars (`THINK__*`) > frontmatter > `~/.thinkingscript/` > defaults.
 - Home dir: `~/.thinkingscript/` (overridable via `THINKINGSCRIPT_HOME`).
 
@@ -75,8 +82,10 @@ When modifying the system prompt, be direct and explicit — especially for smal
 ## Build & Run
 
 ```bash
-go build -o think .
-./think examples/weather.thought "San Francisco"
+make build
+./bin/think examples/weather.thought "San Francisco"
+./bin/thought cache examples/weather.thought
+./bin/thought build input.thought -o output.thought
 ```
 
 ## Dependencies
