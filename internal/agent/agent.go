@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/bradgessler/agent-exec/internal/approval"
-	"github.com/bradgessler/agent-exec/internal/provider"
-	"github.com/bradgessler/agent-exec/internal/tools"
+	"github.com/thinkingscript/cli/internal/approval"
+	"github.com/thinkingscript/cli/internal/provider"
+	"github.com/thinkingscript/cli/internal/tools"
 	"github.com/charmbracelet/lipgloss"
 )
 
-const systemPrompt = `You are agent-exec, a script interpreter that executes natural language scripts.
+const systemPrompt = `You are think, a script interpreter that executes natural language scripts.
 
 The user's message contains the contents of a script file. Your job is to
 accomplish exactly what the script describes by using the tools available to you.
@@ -42,8 +42,8 @@ You do NOT generate code — you ARE the runtime. Use tools to produce results.
   running curl with that city name.
 
 - read_stdin: Read all data piped into this script via stdin. Use when the
-  script is expected to process piped input (e.g., "cat file | agent-exec
-  transform.ai"). Returns empty if nothing was piped.
+  script is expected to process piped input (e.g., "cat file | think
+  transform.thought"). Returns empty if nothing was piped.
 
 ## Rules
 

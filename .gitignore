@@ -1,6 +1,6 @@
 # Binaries
 bin/
-agent-exec
+think
 
 # Go
 *.exe
@@ -15,4 +15,4 @@ agent-exec
 .env
 
 # Home dir (if local)
-.agent-exec/
+.thinkingscript/

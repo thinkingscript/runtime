@@ -1,4 +1,4 @@
 build:
-	go build -o bin/agent-exec .
+	go build -o bin/think .
 
 .PHONY: build

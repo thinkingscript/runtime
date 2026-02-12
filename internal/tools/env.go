@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/bradgessler/agent-exec/internal/approval"
-	"github.com/bradgessler/agent-exec/internal/provider"
+	"github.com/thinkingscript/cli/internal/approval"
+	"github.com/thinkingscript/cli/internal/provider"
 )
 
 type readEnvInput struct {

@@ -2,14 +2,14 @@
 
 ## Project Overview
 
-A Go CLI that acts as a shebang interpreter for natural language scripts. Users write `.ai` files with `#!/usr/bin/env thinkingscript`, and thinkingscript sends the prompt to an LLM which uses tools to accomplish the task. Will eventually live at `thinkingscript/cli`.
+A Go CLI (`think`) that acts as a shebang interpreter for natural language scripts. Users write `.thought` files with `#!/usr/bin/env think`, and the CLI sends the prompt to an LLM which uses tools to accomplish the task. Repo: `thinkingscript/cli`.
 
 ## Architecture
 
 ```
 main.go              → cmd.Execute()
 cmd/root.go          → Cobra root: parse script, resolve config, run agent loop
-cmd/cache.go         → `thinkingscript cache` subcommand
+cmd/cache.go         → `think cache` subcommand
 internal/agent/      → Core agent loop (provider-agnostic)
 internal/provider/   → Provider interface + Anthropic adapter
 internal/config/     → Home dir, config.yaml, agents, fingerprinting
@@ -59,8 +59,9 @@ When modifying the system prompt, be direct and explicit — especially for smal
 - **Provider interface**: Agent loop is decoupled from any specific LLM SDK.
 - **Keep primitives simple**: Small, focused tools that stack on each other. Don't over-architect.
 - **Approval is king**: Every tool that has side effects or reads sensitive data goes through the approver. Even `set_argument` requires approval so the user sees every assignment.
-- Config precedence: env vars (`AGENTEXEC__*`) > frontmatter > `~/.thinkingscript/` > defaults.
-- Home dir: `~/.thinkingscript/` (overridable via `AGENT_EXEC_HOME`).
+- **Binary is `think`**, scripts are `.thought` files, shebangs are `#!/usr/bin/env think`.
+- Config precedence: env vars (`THINK__*`) > frontmatter > `~/.thinkingscript/` > defaults.
+- Home dir: `~/.thinkingscript/` (overridable via `THINKINGSCRIPT_HOME`).
 
 ## Code Style
 
@@ -74,8 +75,8 @@ When modifying the system prompt, be direct and explicit — especially for smal
 ## Build & Run
 
 ```bash
-go build -o thinkingscript .
-./thinkingscript hello.ai
+go build -o think .
+./think examples/weather.thought "San Francisco"
 ```
 
 ## Dependencies
@@ -86,4 +87,3 @@ go build -o thinkingscript .
 - `github.com/charmbracelet/lipgloss` — Styled terminal output
 - `golang.org/x/term` — PTY detection
 - `gopkg.in/yaml.v3` — YAML parsing
-

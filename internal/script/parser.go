@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bradgessler/agent-exec/internal/config"
+	"github.com/thinkingscript/cli/internal/config"
 	"gopkg.in/yaml.v3"
 )
 

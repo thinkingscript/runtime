@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bradgessler/agent-exec/internal/config"
+	"github.com/thinkingscript/cli/internal/config"
 	"github.com/spf13/cobra"
 )
 

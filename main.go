@@ -5,7 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/bradgessler/agent-exec/cmd"
+	"github.com/thinkingscript/cli/cmd"
 )
 
 func main() {

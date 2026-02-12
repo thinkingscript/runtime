@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/bradgessler/agent-exec/internal/approval"
-	"github.com/bradgessler/agent-exec/internal/arguments"
-	"github.com/bradgessler/agent-exec/internal/provider"
+	"github.com/thinkingscript/cli/internal/approval"
+	"github.com/thinkingscript/cli/internal/arguments"
+	"github.com/thinkingscript/cli/internal/provider"
 )
 
 type Handler func(ctx context.Context, input json.RawMessage) (string, error)

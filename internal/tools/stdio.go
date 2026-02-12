@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/bradgessler/agent-exec/internal/provider"
+	"github.com/thinkingscript/cli/internal/provider"
 	"golang.org/x/term"
 )
 

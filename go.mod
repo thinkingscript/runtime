@@ -1,4 +1,4 @@
-module github.com/bradgessler/agent-exec
+module github.com/thinkingscript/cli
 
 go 1.23.4
 

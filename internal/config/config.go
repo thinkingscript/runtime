@@ -51,14 +51,14 @@ type ResolvedConfig struct {
 }
 
 func HomeDir() string {
-	if v := os.Getenv("AGENT_EXEC_HOME"); v != "" {
+	if v := os.Getenv("THINKINGSCRIPT_HOME"); v != "" {
 		return v
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".", ".agent-exec")
+		return filepath.Join(".", ".thinkingscript")
 	}
-	return filepath.Join(home, ".agent-exec")
+	return filepath.Join(home, ".thinkingscript")
 }
 
 func EnsureHomeDir() error {
@@ -184,7 +184,7 @@ func Resolve(scriptCfg *ScriptConfig) *ResolvedConfig {
 }
 
 func getEnv(key string) string {
-	return os.Getenv("AGENTEXEC__" + key)
+	return os.Getenv("THINK__" + key)
 }
 
 // CacheDir returns the cache directory path for a given script path.

@@ -9,8 +9,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/bradgessler/agent-exec/internal/approval"
-	"github.com/bradgessler/agent-exec/internal/provider"
+	"github.com/thinkingscript/cli/internal/approval"
+	"github.com/thinkingscript/cli/internal/provider"
 	"github.com/charmbracelet/lipgloss"
 )
 

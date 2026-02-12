@@ -7,21 +7,21 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bradgessler/agent-exec/internal/agent"
-	"github.com/bradgessler/agent-exec/internal/approval"
-	"github.com/bradgessler/agent-exec/internal/arguments"
-	"github.com/bradgessler/agent-exec/internal/config"
-	"github.com/bradgessler/agent-exec/internal/provider"
-	"github.com/bradgessler/agent-exec/internal/script"
-	"github.com/bradgessler/agent-exec/internal/tools"
+	"github.com/thinkingscript/cli/internal/agent"
+	"github.com/thinkingscript/cli/internal/approval"
+	"github.com/thinkingscript/cli/internal/arguments"
+	"github.com/thinkingscript/cli/internal/config"
+	"github.com/thinkingscript/cli/internal/provider"
+	"github.com/thinkingscript/cli/internal/script"
+	"github.com/thinkingscript/cli/internal/tools"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
 var rootCmd = &cobra.Command{
-	Use:          "agent-exec <script> [args...]",
+	Use:          "think <script> [args...]",
 	Short:        "A shebang interpreter for natural language scripts",
-	Long:         "agent-exec runs natural language scripts by sending them to an LLM that uses tools to accomplish the described task.",
+	Long:         "think runs natural language .thought scripts by sending them to an LLM that uses tools to accomplish the described task.",
 	Args:         cobra.MinimumNArgs(1),
 	RunE:         runScript,
 	SilenceUsage: true,
