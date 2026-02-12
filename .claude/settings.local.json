@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:posener.github.io)",
+      "WebFetch(domain:blog.cloudflare.com)",
+      "WebFetch(domain:cobra.dev)",
+      "WebFetch(domain:linuxvox.com)",
+      "WebFetch(domain:www.glukhov.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.bytesizego.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git init:*)",
+      "Bash(go mod init:*)",
+      "Bash(go get:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(go build:*)",
+      "Bash(./agent-exec:*)",
+      "Bash(env:*)"
+    ]
+  }
+}

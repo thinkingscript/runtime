@@ -1,0 +1,7 @@
+#!/usr/bin/env agent-exec
+---
+model: claude-haiku-4-5-20251001
+wreckless: true
+---
+
+Create a new Rails application named "my_app". Check the first argument for a path, if its not there prompt me for it, then run `rails new` with that path.

@@ -1,0 +1,18 @@
+# Binaries
+bin/
+agent-exec
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Environment
+.env
+
+# Home dir (if local)
+.agent-exec/
