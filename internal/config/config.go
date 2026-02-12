@@ -36,7 +36,6 @@ type AgentConfig struct {
 type ScriptConfig struct {
 	Agent     string `yaml:"agent"`
 	Model     string `yaml:"model"`
-	Wreckless *bool  `yaml:"wreckless"`
 	MaxTokens *int   `yaml:"max_tokens"`
 }
 
@@ -152,9 +151,6 @@ func Resolve(scriptCfg *ScriptConfig) *ResolvedConfig {
 	if scriptCfg != nil {
 		if scriptCfg.Model != "" {
 			resolved.Model = scriptCfg.Model
-		}
-		if scriptCfg.Wreckless != nil {
-			resolved.Wreckless = *scriptCfg.Wreckless
 		}
 		if scriptCfg.MaxTokens != nil {
 			resolved.MaxTokens = *scriptCfg.MaxTokens

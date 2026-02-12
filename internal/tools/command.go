@@ -2,12 +2,16 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 
 	"github.com/bradgessler/agent-exec/internal/approval"
 	"github.com/bradgessler/agent-exec/internal/provider"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type runCommandInput struct {
@@ -19,6 +23,8 @@ type runCommandOutput struct {
 	Stderr   string `json:"stderr"`
 	ExitCode int    `json:"exit_code"`
 }
+
+var cmdStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Faint(true)
 
 func (r *Registry) registerCommand(approver *approval.Approver) {
 	r.register(provider.ToolDefinition{
@@ -34,7 +40,7 @@ func (r *Registry) registerCommand(approver *approval.Approver) {
 			},
 			Required: []string{"command"},
 		},
-	}, func(input json.RawMessage) (string, error) {
+	}, func(ctx context.Context, input json.RawMessage) (string, error) {
 		var args runCommandInput
 		if err := json.Unmarshal(input, &args); err != nil {
 			return "", fmt.Errorf("parsing run_command input: %w", err)
@@ -48,13 +54,18 @@ func (r *Registry) registerCommand(approver *approval.Approver) {
 			return "", fmt.Errorf("denied: run_command %s", args.Command)
 		}
 
-		cmd := exec.Command("sh", "-c", args.Command)
+		fmt.Fprintf(os.Stderr, "%s\n", cmdStyle.Render("$ "+args.Command))
+
+		cmd := exec.CommandContext(ctx, "sh", "-c", args.Command)
 		var stdout, stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
+		cmd.Stdout = io.MultiWriter(&stdout, os.Stderr)
+		cmd.Stderr = io.MultiWriter(&stderr, os.Stderr)
 
 		exitCode := 0
 		if err := cmd.Run(); err != nil {
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
 			if exitErr, ok := err.(*exec.ExitError); ok {
 				exitCode = exitErr.ExitCode()
 			} else {

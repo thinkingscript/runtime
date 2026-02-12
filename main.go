@@ -1,7 +1,15 @@
 package main
 
-import "github.com/bradgessler/agent-exec/cmd"
+import (
+	"context"
+	"os/signal"
+	"syscall"
+
+	"github.com/bradgessler/agent-exec/cmd"
+)
 
 func main() {
-	cmd.Execute()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	cmd.Execute(ctx)
 }

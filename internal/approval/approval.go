@@ -2,6 +2,7 @@ package approval
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
 )
+
+// ErrInterrupted is returned when the user presses Ctrl+C during a prompt.
+var ErrInterrupted = errors.New("interrupted")
 
 type Decision string
 
@@ -130,7 +134,7 @@ func (a *Approver) prompt(toolName, detail string) (Decision, error) {
 	).WithOutput(os.Stderr)
 
 	if err := form.Run(); err != nil {
-		return DecisionDeny, err
+		return DecisionDeny, ErrInterrupted
 	}
 
 	switch choice {

@@ -3,9 +3,11 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
+	"github.com/bradgessler/agent-exec/internal/approval"
 	"github.com/bradgessler/agent-exec/internal/provider"
 	"github.com/bradgessler/agent-exec/internal/tools"
 	"github.com/charmbracelet/lipgloss"
@@ -80,6 +82,10 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 	}
 
 	for i := 0; i < a.maxIterations; i++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
 		resp, err := a.provider.Chat(ctx, provider.ChatParams{
 			Model:     a.model,
 			System:    systemPrompt,
@@ -117,8 +123,11 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 		for _, tu := range toolUses {
 			fmt.Fprintf(os.Stderr, "%s %s\n", toolStyle.Render("tool:"), tu.ToolName)
 
-			result, err := a.registry.Execute(tu.ToolName, json.RawMessage(tu.Input))
+			result, err := a.registry.Execute(ctx, tu.ToolName, json.RawMessage(tu.Input))
 			if err != nil {
+				if ctx.Err() != nil || errors.Is(err, approval.ErrInterrupted) {
+					return err
+				}
 				fmt.Fprintf(os.Stderr, "%s %s\n", errorStyle.Render("error:"), err.Error())
 				resultBlocks = append(resultBlocks, provider.NewToolResultBlock(tu.ToolUseID, err.Error(), true))
 			} else {

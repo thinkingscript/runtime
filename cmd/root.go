@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/bradgessler/agent-exec/internal/agent"
 	"github.com/bradgessler/agent-exec/internal/approval"
@@ -16,21 +18,22 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "agent-exec <script>",
+	Use:   "agent-exec <script> [args...]",
 	Short: "A shebang interpreter for natural language scripts",
 	Long:  "agent-exec runs natural language scripts by sending them to an LLM that uses tools to accomplish the described task.",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  runScript,
 	SilenceUsage: true,
 }
 
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+func Execute(ctx context.Context) {
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		os.Exit(1)
 	}
 }
 
 func init() {
+	rootCmd.Flags().SetInterspersed(false)
 	rootCmd.AddCommand(cacheCmd)
 }
 
@@ -96,9 +99,15 @@ func runScript(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Build prompt: script content + any CLI arguments
+	prompt := parsed.Prompt
+	if len(args) > 1 {
+		prompt += "\n\nArguments: " + strings.Join(args[1:], " ")
+	}
+
 	// Run agent loop
 	a := agent.New(p, registry, resolved.Model, resolved.MaxTokens, resolved.MaxIterations)
-	return a.Run(cmd.Context(), parsed.Prompt)
+	return a.Run(cmd.Context(), prompt)
 }
 
 func createProvider(cfg *config.ResolvedConfig) (provider.Provider, error) {

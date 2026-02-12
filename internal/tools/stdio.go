@@ -1,11 +1,14 @@
 package tools
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/bradgessler/agent-exec/internal/provider"
+	"golang.org/x/term"
 )
 
 type writeStdoutInput struct {
@@ -26,7 +29,7 @@ func (r *Registry) registerStdio() {
 			},
 			Required: []string{"content"},
 		},
-	}, func(input json.RawMessage) (string, error) {
+	}, func(_ context.Context, input json.RawMessage) (string, error) {
 		var args writeStdoutInput
 		if err := json.Unmarshal(input, &args); err != nil {
 			return "", fmt.Errorf("parsing write_stdout input: %w", err)
@@ -39,17 +42,37 @@ func (r *Registry) registerStdio() {
 	})
 }
 
-type readStdinInput struct{}
-
 func (r *Registry) registerStdin(stdinData string) {
+	pipedData := stdinData
+	pipeConsumed := false
+
 	r.register(provider.ToolDefinition{
 		Name:        "read_stdin",
-		Description: "Read all data piped into this script via stdin. Returns empty string if nothing was piped.",
+		Description: "Read input from stdin. If data was piped in, returns all piped data. If stdin is a terminal, waits for the user to type a line and press Enter.",
 		InputSchema: provider.ToolInputSchema{
 			Type:       "object",
 			Properties: map[string]any{},
 		},
-	}, func(input json.RawMessage) (string, error) {
-		return stdinData, nil
+	}, func(_ context.Context, input json.RawMessage) (string, error) {
+		// If we have pre-read piped data, return it (once)
+		if pipedData != "" && !pipeConsumed {
+			pipeConsumed = true
+			return pipedData, nil
+		}
+
+		// If stdin is a TTY, read a line interactively
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			scanner := bufio.NewScanner(os.Stdin)
+			if scanner.Scan() {
+				return scanner.Text(), nil
+			}
+			if err := scanner.Err(); err != nil {
+				return "", fmt.Errorf("reading stdin: %w", err)
+			}
+			return "", nil
+		}
+
+		// Non-TTY, already consumed — return empty
+		return "", nil
 	})
 }

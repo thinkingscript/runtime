@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/bradgessler/agent-exec/internal/provider"
 )
 
-type Handler func(input json.RawMessage) (string, error)
+type Handler func(ctx context.Context, input json.RawMessage) (string, error)
 
 type Registry struct {
 	tools    map[string]provider.ToolDefinition
@@ -44,10 +45,10 @@ func (r *Registry) Definitions() []provider.ToolDefinition {
 	return defs
 }
 
-func (r *Registry) Execute(name string, input json.RawMessage) (string, error) {
+func (r *Registry) Execute(ctx context.Context, name string, input json.RawMessage) (string, error) {
 	handler, ok := r.handlers[name]
 	if !ok {
 		return "", fmt.Errorf("unknown tool: %s", name)
 	}
-	return handler(input)
+	return handler(ctx, input)
 }

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -27,7 +28,7 @@ func (r *Registry) registerEnv(approver *approval.Approver) {
 			},
 			Required: []string{"name"},
 		},
-	}, func(input json.RawMessage) (string, error) {
+	}, func(_ context.Context, input json.RawMessage) (string, error) {
 		var args readEnvInput
 		if err := json.Unmarshal(input, &args); err != nil {
 			return "", fmt.Errorf("parsing read_env input: %w", err)
