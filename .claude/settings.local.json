@@ -19,7 +19,10 @@
       "Bash(go build:*)",
       "Bash(./agent-exec:*)",
       "Bash(env:*)",
-      "Bash(gofmt:*)"
+      "Bash(gofmt:*)",
+      "Bash(sitepress:*)",
+      "Bash(gem search:*)",
+      "Bash(curl:*)"
     ]
   }
 }
