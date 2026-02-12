@@ -18,7 +18,8 @@
       "WebFetch(domain:api.github.com)",
       "Bash(go build:*)",
       "Bash(./agent-exec:*)",
-      "Bash(env:*)"
+      "Bash(env:*)",
+      "Bash(gofmt:*)"
     ]
   }
 }
