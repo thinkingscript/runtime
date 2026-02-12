@@ -9,6 +9,7 @@ import (
 
 	"github.com/bradgessler/agent-exec/internal/agent"
 	"github.com/bradgessler/agent-exec/internal/approval"
+	"github.com/bradgessler/agent-exec/internal/arguments"
 	"github.com/bradgessler/agent-exec/internal/config"
 	"github.com/bradgessler/agent-exec/internal/provider"
 	"github.com/bradgessler/agent-exec/internal/script"
@@ -18,11 +19,11 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "agent-exec <script> [args...]",
-	Short: "A shebang interpreter for natural language scripts",
-	Long:  "agent-exec runs natural language scripts by sending them to an LLM that uses tools to accomplish the described task.",
-	Args:  cobra.MinimumNArgs(1),
-	RunE:  runScript,
+	Use:          "agent-exec <script> [args...]",
+	Short:        "A shebang interpreter for natural language scripts",
+	Long:         "agent-exec runs natural language scripts by sending them to an LLM that uses tools to accomplish the described task.",
+	Args:         cobra.MinimumNArgs(1),
+	RunE:         runScript,
 	SilenceUsage: true,
 }
 
@@ -87,11 +88,12 @@ func runScript(cmd *cobra.Command, args []string) error {
 		stdinData = string(data)
 	}
 
-	// Set up approval system
-	approver := approval.NewApprover(resolved.Wreckless, cacheDir)
+	// Set up named arguments store and approval system
+	argStore := arguments.NewStore()
+	approver := approval.NewApprover(resolved.Wreckless, cacheDir, argStore)
 
 	// Set up tool registry
-	registry := tools.NewRegistry(approver, stdinData)
+	registry := tools.NewRegistry(approver, stdinData, argStore)
 
 	// Create provider
 	p, err := createProvider(resolved)

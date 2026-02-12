@@ -33,6 +33,14 @@ You do NOT generate code — you ARE the runtime. Use tools to produce results.
 - read_env: Read an environment variable by name. Use when the script needs
   configuration from the environment. Requires user approval.
 
+- set_argument: Register a named argument for this session. Call this BEFORE
+  running commands that contain values which could vary between runs (e.g.,
+  user-provided arguments, URLs, filenames, or dynamic values from previous
+  commands). This enables the user to approve a command pattern that
+  auto-matches future runs with different values.
+  Example: set_argument(name="Location", value="San Francisco") before
+  running curl with that city name.
+
 - read_stdin: Read all data piped into this script via stdin. Use when the
   script is expected to process piped input (e.g., "cat file | agent-exec
   transform.ai"). Returns empty if nothing was piped.
@@ -50,7 +58,17 @@ You do NOT generate code — you ARE the runtime. Use tools to produce results.
    messages like "Done!" unless the script asked for that.
 6. If the script is ambiguous, prefer the simplest interpretation.
 7. For multi-step tasks, execute steps in order. Check command exit codes
-   and stop on failure unless the script says otherwise.`
+   and stop on failure unless the script says otherwise.
+8. IMPORTANT: When the user message contains "Arguments:", those are dynamic
+   values passed on the command line. You MUST call set_argument for each
+   argument BEFORE using it in any command. For example, if the message ends
+   with "Arguments: Orinda, CA", call set_argument(name="Location",
+   value="Orinda, CA") immediately, then use that value in commands. This
+   lets the user approve a command pattern once that works for all future
+   argument values. Also use set_argument for any dynamic value that appears
+   in a command — including values obtained from previous commands, API
+   responses, or environment variables — if that value could differ between
+   runs.`
 
 var (
 	debugStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))

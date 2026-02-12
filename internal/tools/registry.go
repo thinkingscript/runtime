@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/bradgessler/agent-exec/internal/approval"
+	"github.com/bradgessler/agent-exec/internal/arguments"
 	"github.com/bradgessler/agent-exec/internal/provider"
 )
 
@@ -17,7 +18,7 @@ type Registry struct {
 	order    []string
 }
 
-func NewRegistry(approver *approval.Approver, stdinData string) *Registry {
+func NewRegistry(approver *approval.Approver, stdinData string, argStore *arguments.Store) *Registry {
 	r := &Registry{
 		tools:    make(map[string]provider.ToolDefinition),
 		handlers: make(map[string]Handler),
@@ -25,6 +26,7 @@ func NewRegistry(approver *approval.Approver, stdinData string) *Registry {
 
 	r.registerStdio()
 	r.registerStdin(stdinData)
+	r.registerArgument(approver, argStore)
 	r.registerEnv(approver)
 	r.registerCommand(approver)
 
