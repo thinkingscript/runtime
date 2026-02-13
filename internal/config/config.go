@@ -184,7 +184,7 @@ func Resolve(scriptCfg *ScriptConfig) *ResolvedConfig {
 }
 
 func getEnv(key string) string {
-	return os.Getenv("THINK__" + key)
+	return os.Getenv("THINKINGSCRIPT__" + key)
 }
 
 // CacheDir returns the cache directory path for a given script path.
