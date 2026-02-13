@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/thinkingscript/cli/internal/arguments"
+	"github.com/thinkingscript/cli/internal/ui"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
@@ -34,20 +35,36 @@ type StoredApprovals struct {
 }
 
 type Approver struct {
-	wreckless bool
-	cacheDir  string
-	stored    *StoredApprovals
-	isTTY     bool
-	argStore  *arguments.Store
+	wreckless  bool
+	cacheDir   string
+	stored     *StoredApprovals
+	isTTY      bool
+	argStore   *arguments.Store
+	scriptName string
+	ttyInput   *os.File
 }
 
-func NewApprover(wreckless bool, cacheDir string, argStore *arguments.Store) *Approver {
+func NewApprover(wreckless bool, cacheDir string, argStore *arguments.Store, scriptName string) *Approver {
+	isTTY := term.IsTerminal(int(os.Stderr.Fd()))
+
+	// When stdin is a pipe but stderr is a terminal, open /dev/tty
+	// for interactive input so approval prompts work in pipelines.
+	var ttyInput *os.File
+	if isTTY && !term.IsTerminal(int(os.Stdin.Fd())) {
+		ttyInput = openTTY()
+		if ttyInput == nil {
+			isTTY = false
+		}
+	}
+
 	a := &Approver{
-		wreckless: wreckless,
-		cacheDir:  cacheDir,
-		isTTY:     term.IsTerminal(int(os.Stderr.Fd())),
-		argStore:  argStore,
-		stored:    &StoredApprovals{},
+		wreckless:  wreckless,
+		cacheDir:   cacheDir,
+		isTTY:      isTTY,
+		argStore:   argStore,
+		scriptName: scriptName,
+		ttyInput:   ttyInput,
+		stored:     &StoredApprovals{},
 	}
 	a.loadStored()
 	return a
@@ -97,11 +114,11 @@ func (a *Approver) ApproveCommand(command string) (bool, error) {
 }
 
 func (a *Approver) ApproveEnvRead(varName string) (bool, error) {
-	return a.approveSimple(a.stored.EnvVars, "Read environment variable", varName)
+	return a.approveSimple(a.stored.EnvVars, "read_env", varName)
 }
 
 func (a *Approver) ApproveArgument(detail string) (bool, error) {
-	return a.approveSimple(a.stored.Arguments, "Set named argument", detail)
+	return a.approveSimple(a.stored.Arguments, "set_argument", detail)
 }
 
 // approveSimple handles the standard approval flow for simple tool actions
@@ -133,34 +150,57 @@ func (a *Approver) approveSimple(stored map[string]Decision, label, key string) 
 }
 
 var (
-	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
-	detailStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	cmdStyle   = ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
+	labelStyle = ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
 )
 
+// indentedTheme creates a huh theme indented to align with the tool name
+// after the "● " prefix (2 chars).
+func indentedTheme() *huh.Theme {
+	t := huh.ThemeBase()
+	t.Focused.Base = lipgloss.NewStyle().PaddingTop(1)
+	t.Focused.SelectSelector = lipgloss.NewStyle().SetString("❯ ")
+	t.Blurred.Base = lipgloss.NewStyle().PaddingTop(1)
+	t.Blurred.SelectSelector = lipgloss.NewStyle().SetString("  ")
+	return t
+}
+
 func (a *Approver) promptCommand(command string, hasArgs bool, args []arguments.Argument) (Decision, error) {
-	fmt.Fprintf(os.Stderr, "\n%s %s\n", warningStyle.Render("Execute command:"), detailStyle.Render(truncate(command, 200)))
+	lock, err := acquirePromptLock()
+	if err != nil {
+		return DecisionDeny, fmt.Errorf("acquiring prompt lock: %w", err)
+	}
+	defer releasePromptLock(lock)
+
+	fmt.Fprintf(os.Stderr, "\n  %s %s\n",
+		labelStyle.Render("$"),
+		cmdStyle.Render(truncate(command, 200)))
 
 	options := []huh.Option[string]{
 		huh.NewOption("Yes", "yes"),
-		huh.NewOption("No", "no"),
-		huh.NewOption("Always (exact command)", "always"),
+		huh.NewOption("Always", "always"),
 	}
 
 	if hasArgs {
 		pattern := commandToPattern(command, args)
-		label := fmt.Sprintf("Always (similar: %s)", truncate(pattern, 60))
+		label := fmt.Sprintf("Always similar (%s)", truncate(pattern, 60))
 		options = append(options, huh.NewOption(label, "always_similar"))
 	}
+
+	options = append(options, huh.NewOption("No", "no"))
 
 	var choice string
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Title("Allow this action?").
 				Options(options...).
 				Value(&choice),
 		),
-	).WithOutput(os.Stderr)
+	).WithTheme(indentedTheme()).WithOutput(os.Stderr)
+
+	if a.ttyInput != nil {
+		form = form.WithInput(a.ttyInput)
+	}
 
 	if err := form.Run(); err != nil {
 		return DecisionDeny, ErrInterrupted
@@ -178,22 +218,32 @@ func (a *Approver) promptCommand(command string, hasArgs bool, args []arguments.
 	}
 }
 
-func (a *Approver) prompt(label, detail string) (Decision, error) {
-	fmt.Fprintf(os.Stderr, "\n%s %s\n", warningStyle.Render(label+":"), detailStyle.Render(truncate(detail, 200)))
+func (a *Approver) prompt(toolName, detail string) (Decision, error) {
+	lock, err := acquirePromptLock()
+	if err != nil {
+		return DecisionDeny, fmt.Errorf("acquiring prompt lock: %w", err)
+	}
+	defer releasePromptLock(lock)
+
+	fmt.Fprintf(os.Stderr, "\n  %s\n",
+		cmdStyle.Render(truncate(detail, 200)))
 
 	var choice string
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
-				Title("Allow this action?").
 				Options(
 					huh.NewOption("Yes", "yes"),
+					huh.NewOption("Always", "always"),
 					huh.NewOption("No", "no"),
-					huh.NewOption("Always (remember for this script)", "always"),
 				).
 				Value(&choice),
 		),
-	).WithOutput(os.Stderr)
+	).WithTheme(indentedTheme()).WithOutput(os.Stderr)
+
+	if a.ttyInput != nil {
+		form = form.WithInput(a.ttyInput)
+	}
 
 	if err := form.Run(); err != nil {
 		return DecisionDeny, ErrInterrupted

@@ -10,6 +10,7 @@ import (
 	"github.com/thinkingscript/cli/internal/approval"
 	"github.com/thinkingscript/cli/internal/provider"
 	"github.com/thinkingscript/cli/internal/tools"
+	"github.com/thinkingscript/cli/internal/ui"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -71,9 +72,9 @@ You do NOT generate code — you ARE the runtime. Use tools to produce results.
    runs.`
 
 var (
-	debugStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
-	toolStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+	debugStyle = ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
+	errorStyle = ui.Renderer.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+	toolStyle  = ui.Renderer.NewStyle().Foreground(lipgloss.Color("39"))
 )
 
 type Agent struct {
@@ -82,15 +83,17 @@ type Agent struct {
 	model         string
 	maxTokens     int
 	maxIterations int
+	scriptName    string
 }
 
-func New(p provider.Provider, r *tools.Registry, model string, maxTokens, maxIterations int) *Agent {
+func New(p provider.Provider, r *tools.Registry, model string, maxTokens, maxIterations int, scriptName string) *Agent {
 	return &Agent{
 		provider:      p,
 		registry:      r,
 		model:         model,
 		maxTokens:     maxTokens,
 		maxIterations: maxIterations,
+		scriptName:    scriptName,
 	}
 }
 
@@ -139,14 +142,14 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 		// Execute each tool call and collect results
 		var resultBlocks []provider.ContentBlock
 		for _, tu := range toolUses {
-			fmt.Fprintf(os.Stderr, "%s %s\n", toolStyle.Render("tool:"), tu.ToolName)
+			fmt.Fprintf(os.Stderr, "\n%s %s\n", toolStyle.Render("●"), fmt.Sprintf("%s(%s)", tu.ToolName, a.scriptName))
 
 			result, err := a.registry.Execute(ctx, tu.ToolName, json.RawMessage(tu.Input))
 			if err != nil {
 				if ctx.Err() != nil || errors.Is(err, approval.ErrInterrupted) {
 					return err
 				}
-				fmt.Fprintf(os.Stderr, "%s %s\n", errorStyle.Render("error:"), err.Error())
+				fmt.Fprintf(os.Stderr, "  %s %s\n", errorStyle.Render("error:"), err.Error())
 				resultBlocks = append(resultBlocks, provider.NewToolResultBlock(tu.ToolUseID, err.Error(), true))
 			} else {
 				resultBlocks = append(resultBlocks, provider.NewToolResultBlock(tu.ToolUseID, result, false))

@@ -89,7 +89,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 
 	// Set up named arguments store and approval system
 	argStore := arguments.NewStore()
-	approver := approval.NewApprover(resolved.Wreckless, cacheDir, argStore)
+	approver := approval.NewApprover(resolved.Wreckless, cacheDir, argStore, scriptPath)
 
 	// Set up tool registry
 	registry := tools.NewRegistry(approver, stdinData, argStore)
@@ -107,7 +107,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 	}
 
 	// Run agent loop
-	a := agent.New(p, registry, resolved.Model, resolved.MaxTokens, resolved.MaxIterations)
+	a := agent.New(p, registry, resolved.Model, resolved.MaxTokens, resolved.MaxIterations, scriptPath)
 	return a.Run(cmd.Context(), prompt)
 }
 

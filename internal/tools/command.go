@@ -11,7 +11,6 @@ import (
 
 	"github.com/thinkingscript/cli/internal/approval"
 	"github.com/thinkingscript/cli/internal/provider"
-	"github.com/charmbracelet/lipgloss"
 )
 
 type runCommandInput struct {
@@ -23,8 +22,6 @@ type runCommandOutput struct {
 	Stderr   string `json:"stderr"`
 	ExitCode int    `json:"exit_code"`
 }
-
-var cmdStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Faint(true)
 
 func (r *Registry) registerCommand(approver *approval.Approver) {
 	r.register(provider.ToolDefinition{
@@ -53,8 +50,6 @@ func (r *Registry) registerCommand(approver *approval.Approver) {
 		if !approved {
 			return "", fmt.Errorf("denied: run_command %s", args.Command)
 		}
-
-		fmt.Fprintf(os.Stderr, "%s\n", cmdStyle.Render("$ "+args.Command))
 
 		cmd := exec.CommandContext(ctx, "sh", "-c", args.Command)
 		var stdout, stderr bytes.Buffer
