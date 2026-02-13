@@ -39,7 +39,7 @@ func (r *Registry) registerStdio() {
 			return "", fmt.Errorf("writing to stdout: %w", err)
 		}
 		return "ok", nil
-	})
+	}, nil) // no approval needed
 }
 
 func (r *Registry) registerStdin(stdinData string) {
@@ -74,5 +74,5 @@ func (r *Registry) registerStdin(stdinData string) {
 
 		// Non-TTY, already consumed — return empty
 		return "", nil
-	})
+	}, nil) // no approval needed
 }

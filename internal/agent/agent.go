@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -144,7 +143,7 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 		for _, tu := range toolUses {
 			fmt.Fprintf(os.Stderr, "\n%s %s\n", toolStyle.Render("●"), fmt.Sprintf("%s(%s)", tu.ToolName, a.scriptName))
 
-			result, err := a.registry.Execute(ctx, tu.ToolName, json.RawMessage(tu.Input))
+			result, err := a.registry.Execute(ctx, tu.ToolName, tu.Input)
 			if err != nil {
 				if ctx.Err() != nil || errors.Is(err, approval.ErrInterrupted) {
 					return err

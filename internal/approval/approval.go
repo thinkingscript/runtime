@@ -35,16 +35,15 @@ type StoredApprovals struct {
 }
 
 type Approver struct {
-	wreckless  bool
-	cacheDir   string
-	stored     *StoredApprovals
-	isTTY      bool
-	argStore   *arguments.Store
-	scriptName string
-	ttyInput   *os.File
+	wreckless bool
+	cacheDir  string
+	stored    *StoredApprovals
+	isTTY     bool
+	argStore  *arguments.Store
+	ttyInput  *os.File
 }
 
-func NewApprover(wreckless bool, cacheDir string, argStore *arguments.Store, scriptName string) *Approver {
+func NewApprover(wreckless bool, cacheDir string, argStore *arguments.Store) *Approver {
 	isTTY := term.IsTerminal(int(os.Stderr.Fd()))
 
 	// When stdin is a pipe but stderr is a terminal, open /dev/tty
@@ -58,16 +57,23 @@ func NewApprover(wreckless bool, cacheDir string, argStore *arguments.Store, scr
 	}
 
 	a := &Approver{
-		wreckless:  wreckless,
-		cacheDir:   cacheDir,
-		isTTY:      isTTY,
-		argStore:   argStore,
-		scriptName: scriptName,
-		ttyInput:   ttyInput,
-		stored:     &StoredApprovals{},
+		wreckless: wreckless,
+		cacheDir:  cacheDir,
+		isTTY:     isTTY,
+		argStore:  argStore,
+		ttyInput:  ttyInput,
+		stored:    &StoredApprovals{},
 	}
 	a.loadStored()
 	return a
+}
+
+// Close releases resources held by the Approver.
+func (a *Approver) Close() {
+	if a.ttyInput != nil {
+		a.ttyInput.Close()
+		a.ttyInput = nil
+	}
 }
 
 func (a *Approver) ApproveCommand(command string) (bool, error) {
@@ -288,9 +294,12 @@ func (a *Approver) saveStored() {
 	}
 	data, err := json.MarshalIndent(a.stored, "", "  ")
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to marshal approvals: %v\n", err)
 		return
 	}
-	_ = os.WriteFile(filepath.Join(a.cacheDir, "approvals.json"), data, 0644)
+	if err := os.WriteFile(filepath.Join(a.cacheDir, "approvals.json"), data, 0600); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to save approvals: %v\n", err)
+	}
 }
 
 func truncate(s string, max int) string {

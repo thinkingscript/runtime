@@ -180,6 +180,16 @@ func Resolve(scriptCfg *ScriptConfig) *ResolvedConfig {
 		resolved.APIBase = v
 	}
 
+	// Fall back to standard env vars if no key was configured above.
+	if resolved.APIKey == "" {
+		if v := os.Getenv("ANTHROPIC_API_KEY"); v != "" && resolved.Provider == "anthropic" {
+			resolved.APIKey = v
+		}
+		if v := os.Getenv("OPENAI_API_KEY"); v != "" && resolved.Provider == "openai" {
+			resolved.APIKey = v
+		}
+	}
+
 	return resolved
 }
 
@@ -227,5 +237,5 @@ func WriteMeta(cacheDir, scriptPath string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(cacheDir, "meta.json"), data, 0644)
+	return os.WriteFile(filepath.Join(cacheDir, "meta.yaml"), data, 0644)
 }

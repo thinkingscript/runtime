@@ -6,13 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/thinkingscript/cli/internal/config"
 	"github.com/spf13/cobra"
 )
 
 var installCmd = &cobra.Command{
-	Use:          "install <script.thought>",
-	Short:        "Build and install a .thought script to the thoughts directory",
-	Long:         "Builds a .thought script with shebang and executable permissions, then installs it to ~/.thinkingscript/thoughts/ (or THINKINGSCRIPT_THOUGHTS_HOME). Add that directory to your PATH to run scripts by name.",
+	Use:          "install <script>",
+	Short:        "Build and install a script to the thoughts directory",
+	Long:         "Builds a script with shebang and executable permissions, then installs it to ~/.thinkingscript/thoughts/ (or THINKINGSCRIPT_THOUGHTS_HOME). Add that directory to your PATH to run scripts by name.",
 	Args:         cobra.ExactArgs(1),
 	RunE:         runInstall,
 	SilenceUsage: true,
@@ -22,11 +23,7 @@ func thoughtsHome() string {
 	if v := os.Getenv("THINKINGSCRIPT_THOUGHTS_HOME"); v != "" {
 		return v
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(".", ".thinkingscript", "thoughts")
-	}
-	return filepath.Join(home, ".thinkingscript", "thoughts")
+	return filepath.Join(config.HomeDir(), "thoughts")
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
@@ -48,9 +45,9 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating thoughts directory: %w", err)
 	}
 
-	// Strip .thought extension for the binary name
+	// Strip known extensions for the binary name
 	base := filepath.Base(inputPath)
-	name := strings.TrimSuffix(base, ".thought")
+	name := strings.TrimSuffix(base, filepath.Ext(base))
 
 	outPath := filepath.Join(dir, name)
 	if err := os.WriteFile(outPath, []byte(body), 0755); err != nil {

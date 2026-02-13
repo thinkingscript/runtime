@@ -43,14 +43,6 @@ func (r *Registry) registerCommand(approver *approval.Approver) {
 			return "", fmt.Errorf("parsing run_command input: %w", err)
 		}
 
-		approved, err := approver.ApproveCommand(args.Command)
-		if err != nil {
-			return "", fmt.Errorf("approval error: %w", err)
-		}
-		if !approved {
-			return "", fmt.Errorf("denied: run_command %s", args.Command)
-		}
-
 		cmd := exec.CommandContext(ctx, "sh", "-c", args.Command)
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = io.MultiWriter(&stdout, os.Stderr)
@@ -75,5 +67,11 @@ func (r *Registry) registerCommand(approver *approval.Approver) {
 		}
 		result, _ := json.Marshal(out)
 		return string(result), nil
+	}, func(input json.RawMessage) (bool, error) {
+		var args runCommandInput
+		if err := json.Unmarshal(input, &args); err != nil {
+			return false, fmt.Errorf("parsing run_command input: %w", err)
+		}
+		return approver.ApproveCommand(args.Command)
 	})
 }

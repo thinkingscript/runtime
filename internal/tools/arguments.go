@@ -40,23 +40,20 @@ func (r *Registry) registerArgument(approver *approval.Approver, argStore *argum
 			return "", fmt.Errorf("parsing set_argument input: %w", err)
 		}
 
-		if args.Name == "" {
-			return "", errors.New("argument name must not be empty")
-		}
-		if args.Value == "" {
-			return "", errors.New("argument value must not be empty")
-		}
-
-		detail := fmt.Sprintf("%s = %s", args.Name, args.Value)
-		approved, err := approver.ApproveArgument(detail)
-		if err != nil {
-			return "", fmt.Errorf("approval error: %w", err)
-		}
-		if !approved {
-			return "", fmt.Errorf("denied: set_argument %s", detail)
-		}
-
 		argStore.Set(args.Name, args.Value)
 		return fmt.Sprintf("Argument %s set to %q", args.Name, args.Value), nil
+	}, func(input json.RawMessage) (bool, error) {
+		var args setArgumentInput
+		if err := json.Unmarshal(input, &args); err != nil {
+			return false, fmt.Errorf("parsing set_argument input: %w", err)
+		}
+		if args.Name == "" {
+			return false, errors.New("argument name must not be empty")
+		}
+		if args.Value == "" {
+			return false, errors.New("argument value must not be empty")
+		}
+		detail := fmt.Sprintf("%s = %s", args.Name, args.Value)
+		return approver.ApproveArgument(detail)
 	})
 }

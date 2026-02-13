@@ -89,7 +89,8 @@ func runScript(cmd *cobra.Command, args []string) error {
 
 	// Set up named arguments store and approval system
 	argStore := arguments.NewStore()
-	approver := approval.NewApprover(resolved.Wreckless, cacheDir, argStore, scriptPath)
+	approver := approval.NewApprover(resolved.Wreckless, cacheDir, argStore)
+	defer approver.Close()
 
 	// Set up tool registry
 	registry := tools.NewRegistry(approver, stdinData, argStore)

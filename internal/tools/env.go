@@ -33,15 +33,12 @@ func (r *Registry) registerEnv(approver *approval.Approver) {
 		if err := json.Unmarshal(input, &args); err != nil {
 			return "", fmt.Errorf("parsing read_env input: %w", err)
 		}
-
-		approved, err := approver.ApproveEnvRead(args.Name)
-		if err != nil {
-			return "", fmt.Errorf("approval error: %w", err)
-		}
-		if !approved {
-			return "", fmt.Errorf("denied: read_env %s", args.Name)
-		}
-
 		return os.Getenv(args.Name), nil
+	}, func(input json.RawMessage) (bool, error) {
+		var args readEnvInput
+		if err := json.Unmarshal(input, &args); err != nil {
+			return false, fmt.Errorf("parsing read_env input: %w", err)
+		}
+		return approver.ApproveEnvRead(args.Name)
 	})
 }
