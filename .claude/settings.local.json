@@ -22,7 +22,12 @@
       "Bash(gofmt:*)",
       "Bash(sitepress:*)",
       "Bash(gem search:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(make build:*)",
+      "WebFetch(domain:www.dealershipguy.com)",
+      "WebFetch(domain:dealershipguy.com)",
+      "Bash(grep:*)",
+      "Bash(bundle exec sitepress:*)"
     ]
   }
 }
