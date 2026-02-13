@@ -22,4 +22,5 @@ func execute(ctx context.Context) {
 func init() {
 	rootCmd.AddCommand(cacheCmd)
 	rootCmd.AddCommand(buildCmd)
+	rootCmd.AddCommand(installCmd)
 }
