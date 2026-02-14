@@ -64,8 +64,9 @@ func EnsureHomeDir() error {
 	dirs := []string{
 		home,
 		filepath.Join(home, "agents"),
+		filepath.Join(home, "bin"),
 		filepath.Join(home, "cache"),
-		filepath.Join(home, "memories"),
+		filepath.Join(home, "thoughts"),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0700); err != nil {
@@ -83,11 +84,26 @@ func ThoughtName(scriptPath string) string {
 	return strings.TrimSuffix(base, ext)
 }
 
+// BinDir returns the directory for installed thought binaries.
+func BinDir() string {
+	return filepath.Join(HomeDir(), "bin")
+}
+
+// ThoughtDir returns the per-thought data directory for a given script.
+func ThoughtDir(scriptPath string) string {
+	return filepath.Join(HomeDir(), "thoughts", ThoughtName(scriptPath))
+}
+
+// WorkspaceDir returns the workspace directory for a given script.
+func WorkspaceDir(scriptPath string) string {
+	return filepath.Join(ThoughtDir(scriptPath), "workspace")
+}
+
 // MemoriesDir returns the memories directory for a given script.
 // Memories are stored by thought name, not content hash, so they
 // survive script edits and binary rebuilds.
 func MemoriesDir(scriptPath string) string {
-	return filepath.Join(HomeDir(), "memories", ThoughtName(scriptPath))
+	return filepath.Join(ThoughtDir(scriptPath), "memories")
 }
 
 func LoadConfig() *Config {

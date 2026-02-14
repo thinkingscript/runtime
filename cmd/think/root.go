@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/thinkingscript/cli/internal/agent"
@@ -116,7 +115,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 
 	// Set up sandbox paths
 	workDir, _ := os.Getwd()
-	workspaceDir := filepath.Join(cacheDir, "workspace")
+	workspaceDir := config.WorkspaceDir(scriptPath)
 	os.MkdirAll(workspaceDir, 0700)
 	memoriesDir := config.MemoriesDir(scriptPath)
 	os.MkdirAll(memoriesDir, 0700)

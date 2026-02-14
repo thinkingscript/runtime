@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 
 	"github.com/thinkingscript/cli/internal/config"
@@ -28,12 +27,7 @@ func init() {
 
 func runWorkspace(cmd *cobra.Command, args []string) error {
 	scriptPath := args[0]
-	cacheDir, err := config.CacheDir(scriptPath)
-	if err != nil {
-		return fmt.Errorf("computing cache dir: %w", err)
-	}
-
-	workspaceDir := filepath.Join(cacheDir, "workspace")
+	workspaceDir := config.WorkspaceDir(scriptPath)
 	if _, err := os.Stat(workspaceDir); os.IsNotExist(err) {
 		fmt.Fprintln(os.Stderr, "No workspace yet.")
 		return nil

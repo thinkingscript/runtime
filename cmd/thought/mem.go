@@ -35,8 +35,8 @@ func runMemoryLs(cmd *cobra.Command, args []string) error {
 }
 
 func listAllMemories() error {
-	memoriesBase := filepath.Join(config.HomeDir(), "memories")
-	entries, err := os.ReadDir(memoriesBase)
+	thoughtsBase := filepath.Join(config.HomeDir(), "thoughts")
+	entries, err := os.ReadDir(thoughtsBase)
 	if err != nil {
 		if os.IsNotExist(err) {
 			fmt.Fprintln(os.Stderr, "No memories yet.")
@@ -50,8 +50,8 @@ func listAllMemories() error {
 		if !e.IsDir() {
 			continue
 		}
-		thoughtDir := filepath.Join(memoriesBase, e.Name())
-		memEntries, err := os.ReadDir(thoughtDir)
+		memoriesDir := filepath.Join(thoughtsBase, e.Name(), "memories")
+		memEntries, err := os.ReadDir(memoriesDir)
 		if err != nil || len(memEntries) == 0 {
 			continue
 		}
@@ -59,7 +59,7 @@ func listAllMemories() error {
 		found = true
 		for _, m := range memEntries {
 			if !m.IsDir() {
-				fmt.Fprintln(os.Stdout, filepath.Join(thoughtDir, m.Name()))
+				fmt.Fprintln(os.Stdout, filepath.Join(memoriesDir, m.Name()))
 			}
 		}
 	}

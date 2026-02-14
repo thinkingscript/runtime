@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -12,18 +13,11 @@ import (
 
 var installCmd = &cobra.Command{
 	Use:          "install <script>",
-	Short:        "Build and install a script to the thoughts directory",
-	Long:         "Builds a script with shebang and executable permissions, then installs it to ~/.thinkingscript/thoughts/ (or THINKINGSCRIPT_THOUGHTS_HOME). Add that directory to your PATH to run scripts by name.",
+	Short:        "Build and install a script to the bin directory",
+	Long:         "Builds a script with shebang and executable permissions, then installs it to ~/.thinkingscript/bin/. Add that directory to your PATH to run scripts by name.",
 	Args:         cobra.ExactArgs(1),
 	RunE:         runInstall,
 	SilenceUsage: true,
-}
-
-func thoughtsHome() string {
-	if v := os.Getenv("THINKINGSCRIPT_THOUGHTS_HOME"); v != "" {
-		return v
-	}
-	return filepath.Join(config.HomeDir(), "thoughts")
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
@@ -40,14 +34,19 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		body = shebang + body
 	}
 
-	dir := thoughtsHome()
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("creating thoughts directory: %w", err)
+	dir := config.BinDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("creating bin directory: %w", err)
 	}
 
 	// Strip known extensions for the binary name
 	base := filepath.Base(inputPath)
 	name := strings.TrimSuffix(base, filepath.Ext(base))
+
+	// Warn if an existing command would shadow this thought
+	if existing, err := exec.LookPath(name); err == nil {
+		fmt.Fprintf(os.Stderr, "Warning: %q already exists at %s and will shadow the installed thought\n", name, existing)
+	}
 
 	outPath := filepath.Join(dir, name)
 	if err := os.WriteFile(outPath, []byte(body), 0755); err != nil {
@@ -56,6 +55,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "Installed %s → %s\n", inputPath, outPath)
 	fmt.Fprintln(os.Stderr, "Make sure this is in your PATH:")
-	fmt.Fprintf(os.Stderr, "  export PATH=\"%s:$PATH\"\n", dir)
+	fmt.Fprintf(os.Stderr, "  export PATH=\"$PATH:%s\"\n", dir)
 	return nil
 }
