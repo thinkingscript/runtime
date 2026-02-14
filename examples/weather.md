@@ -1,10 +1,5 @@
 #!/usr/bin/env think
----
-model: claude-haiku-4-5-20251001
----
-
-Read WEATHER.md to see if instructions are in there for how to load weather without discovering the system. Run whatever is in there. If you run into errors along the way and need to change the plan, write it out to WEATHER.md.
 
 Figure out where I am and tell me the current weather conditions. If arguments are passed in, it could be a zip code or city. If its not, try to geolocate.
 
-I want a consistent output format, so check WEATHER.md for that and use it. if its not there, cook up a format and put in in the markdown.
+You can cache the results for an hour so you don't have to make a new request every time.

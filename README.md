@@ -35,10 +35,10 @@ model: claude-sonnet-4-5-20250929
 EOF
 ```
 
-Or just set the environment variable:
+Or set the environment variable:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+export THINKINGSCRIPT__ANTHROPIC__API_KEY=sk-ant-...
 ```
 
 3. **Write a script**
@@ -70,7 +70,6 @@ Scripts can include optional YAML frontmatter between `---` delimiters to config
 ---
 agent: local
 model: llama3
-wreckless: true
 max_tokens: 8192
 ---
 
@@ -83,7 +82,6 @@ All frontmatter fields are optional:
 |-------|-------------|---------|
 | `agent` | Which agent definition to use | `anthropic` |
 | `model` | Override the agent's default model | Agent's model |
-| `wreckless` | Auto-approve all tool calls | `false` |
 | `max_tokens` | Maximum tokens for LLM response | `4096` |
 
 ## Configuration
@@ -92,17 +90,36 @@ Configuration is resolved with three layers (highest precedence first):
 
 ### 1. Environment Variables
 
-ENV vars use `AGENTEXEC__` prefix with `__` as separator:
+ENV vars use `THINKINGSCRIPT__` prefix with `__` as separator:
 
 | ENV var | Description | Example |
 |---------|-------------|---------|
-| `AGENTEXEC__AGENT` | Agent to use | `anthropic` |
-| `AGENTEXEC__MODEL` | Model override | `claude-opus-4-6` |
-| `AGENTEXEC__WRECKLESS` | Auto-approve all | `true` |
-| `AGENTEXEC__MAX_TOKENS` | Max tokens | `8192` |
-| `AGENTEXEC__ANTHROPIC__API_KEY` | Anthropic API key | `sk-ant-...` |
-| `AGENTEXEC__OPENAI__API_KEY` | OpenAI API key | `sk-...` |
-| `AGENTEXEC__OPENAI__API_BASE` | OpenAI base URL | `http://localhost:11434/v1` |
+| `THINKINGSCRIPT__AGENT` | Agent to use | `anthropic` |
+| `THINKINGSCRIPT__MODEL` | Model override | `claude-opus-4-6` |
+| `THINKINGSCRIPT__MAX_TOKENS` | Max tokens | `8192` |
+| `THINKINGSCRIPT__ANTHROPIC__API_KEY` | Anthropic API key | `sk-ant-...` |
+| `THINKINGSCRIPT__OPENAI__API_KEY` | OpenAI API key | `sk-...` |
+| `THINKINGSCRIPT__OPENAI__API_BASE` | OpenAI base URL | `http://localhost:11434/v1` |
+| `THINKINGSCRIPT__CACHE` | Cache mode (see below) | `off` |
+| `THINKINGSCRIPT_HOME` | Override home directory | `~/.mythinkingscript` |
+
+#### Cache modes (`THINKINGSCRIPT__CACHE`)
+
+Controls how per-script cache (approvals, scratch notes) is managed between runs. Note that caches are automatically invalidated when either the script content or the `think` binary changes — so upgrading `think` or editing a script always starts fresh.
+
+| Mode | Description |
+|------|-------------|
+| `persist` (default) | Cache survives between runs. Scratch notes accumulate so scripts improve over time. |
+| `ephemeral` | Cache works during the run but is wiped on exit. Useful for one-off runs where you don't want stale notes influencing behavior. |
+| `off` | No cache at all. Cache is wiped before and after the run, and scratch notes instructions are removed from the system prompt. |
+
+```bash
+# Fresh run, no notes influencing behavior
+THINKINGSCRIPT__CACHE=off think examples/images.md
+
+# Cache works during the run but doesn't persist
+THINKINGSCRIPT__CACHE=ephemeral think examples/weather.md
+```
 
 ### 2. Script Frontmatter
 
@@ -128,7 +145,6 @@ See [Frontmatter](#frontmatter) above.
 ```yaml
 version: 1
 agent: anthropic
-wreckless: false
 max_tokens: 4096
 max_iterations: 50
 ```
@@ -171,7 +187,6 @@ When the LLM wants to run a command or read an env var, agent-exec prompts you f
 
 - **Interactive TTY**: Styled confirmation prompt with Yes / No / Always options
 - **Non-interactive**: Denied by default (safe for CI/pipes)
-- **Wreckless mode**: Auto-approve everything (via frontmatter `wreckless: true` or `AGENTEXEC__WRECKLESS=true`)
 
 Choosing "Always" persists the approval in the script's cache directory. Approvals are automatically invalidated when the script content changes.
 
@@ -240,12 +255,9 @@ List all .go files in the current directory, then count them and print
 Read the HOME environment variable and print the path.
 ```
 
-### Wreckless Mode
+### Run Commands with Approval
 
 ```
 #!/usr/bin/env agent-exec
----
-wreckless: true
----
 Run "uname -a" and print the output.
 ```
