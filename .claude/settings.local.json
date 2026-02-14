@@ -27,7 +27,14 @@
       "WebFetch(domain:www.dealershipguy.com)",
       "WebFetch(domain:dealershipguy.com)",
       "Bash(grep:*)",
-      "Bash(bundle exec sitepress:*)"
+      "Bash(bundle exec sitepress:*)",
+      "Bash(ls:*)",
+      "Bash(go list:*)",
+      "Bash(go mod tidy:*)",
+      "Bash(go test:*)",
+      "Bash(go mod verify:*)",
+      "Bash(go vet:*)",
+      "Bash(git add:*)"
     ]
   }
 }

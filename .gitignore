@@ -17,3 +17,11 @@ bin/
 
 # Home dir (if local)
 .thinkingscript/
+
+# Runtime artifacts
+workspace/
+memories/
+*.mp3
+*.html
+*-cache.json
+*_cache.json
