@@ -20,7 +20,6 @@ const (
 type Config struct {
 	Version       int    `yaml:"version"`
 	Agent         string `yaml:"agent"`
-	Wreckless     bool   `yaml:"wreckless"`
 	MaxTokens     int    `yaml:"max_tokens"`
 	MaxIterations int    `yaml:"max_iterations"`
 }
@@ -45,7 +44,6 @@ type ResolvedConfig struct {
 	APIKey        string
 	APIBase       string
 	Model         string
-	Wreckless     bool
 	MaxTokens     int
 	MaxIterations int
 }
@@ -67,13 +65,29 @@ func EnsureHomeDir() error {
 		home,
 		filepath.Join(home, "agents"),
 		filepath.Join(home, "cache"),
+		filepath.Join(home, "memories"),
 	}
 	for _, d := range dirs {
-		if err := os.MkdirAll(d, 0755); err != nil {
+		if err := os.MkdirAll(d, 0700); err != nil {
 			return fmt.Errorf("creating directory %s: %w", d, err)
 		}
 	}
 	return nil
+}
+
+// ThoughtName derives a human-readable name from a script path.
+// "examples/weather.md" → "weather", "my-stocks.thought" → "my-stocks"
+func ThoughtName(scriptPath string) string {
+	base := filepath.Base(scriptPath)
+	ext := filepath.Ext(base)
+	return strings.TrimSuffix(base, ext)
+}
+
+// MemoriesDir returns the memories directory for a given script.
+// Memories are stored by thought name, not content hash, so they
+// survive script edits and binary rebuilds.
+func MemoriesDir(scriptPath string) string {
+	return filepath.Join(HomeDir(), "memories", ThoughtName(scriptPath))
 }
 
 func LoadConfig() *Config {
@@ -134,7 +148,6 @@ func Resolve(scriptCfg *ScriptConfig) *ResolvedConfig {
 		APIKey:        agent.APIKey,
 		APIBase:       agent.APIBase,
 		Model:         agent.Model,
-		Wreckless:     cfg.Wreckless,
 		MaxTokens:     cfg.MaxTokens,
 		MaxIterations: cfg.MaxIterations,
 	}
@@ -161,9 +174,6 @@ func Resolve(scriptCfg *ScriptConfig) *ResolvedConfig {
 	if v := getEnv("MODEL"); v != "" {
 		resolved.Model = v
 	}
-	if v := getEnv("WRECKLESS"); v == "true" || v == "1" {
-		resolved.Wreckless = true
-	}
 	if v := getEnv("MAX_TOKENS"); v != "" {
 		var n int
 		if _, err := fmt.Sscanf(v, "%d", &n); err == nil && n > 0 {
@@ -178,16 +188,6 @@ func Resolve(scriptCfg *ScriptConfig) *ResolvedConfig {
 	}
 	if v := getEnv("OPENAI__API_BASE"); v != "" && resolved.Provider == "openai" {
 		resolved.APIBase = v
-	}
-
-	// Fall back to standard env vars if no key was configured above.
-	if resolved.APIKey == "" {
-		if v := os.Getenv("ANTHROPIC_API_KEY"); v != "" && resolved.Provider == "anthropic" {
-			resolved.APIKey = v
-		}
-		if v := os.Getenv("OPENAI_API_KEY"); v != "" && resolved.Provider == "openai" {
-			resolved.APIKey = v
-		}
 	}
 
 	return resolved
@@ -208,10 +208,18 @@ func CacheDir(scriptPath string) (string, error) {
 	return filepath.Join(HomeDir(), "cache", shortHash), nil
 }
 
-// Fingerprint computes a SHA-256 hash of file contents.
+// Fingerprint computes a SHA-256 hash of the given data combined with the
+// running binary's own content. This ensures caches invalidate when either
+// the script or the think binary changes.
 func Fingerprint(data []byte) string {
-	hash := sha256.Sum256(data)
-	return fmt.Sprintf("%x", hash)
+	h := sha256.New()
+	h.Write(data)
+	if exe, err := os.Executable(); err == nil {
+		if bin, err := os.ReadFile(exe); err == nil {
+			h.Write(bin)
+		}
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // CheckFingerprint verifies if the cached fingerprint matches. Returns true if valid.

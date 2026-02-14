@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/thinkingscript/cli/internal/approval"
-	"github.com/thinkingscript/cli/internal/arguments"
 	"github.com/thinkingscript/cli/internal/provider"
 )
 
@@ -29,16 +28,13 @@ type Registry struct {
 	order []string
 }
 
-func NewRegistry(approver *approval.Approver, stdinData string, argStore *arguments.Store) *Registry {
+func NewRegistry(approver *approval.Approver, workDir, workspaceDir, memoriesDir, scriptName string) *Registry {
 	r := &Registry{
 		regs: make(map[string]registration),
 	}
 
 	r.registerStdio()
-	r.registerStdin(stdinData)
-	r.registerArgument(approver, argStore)
-	r.registerEnv(approver)
-	r.registerCommand(approver)
+	r.registerScript(approver, workDir, workspaceDir, memoriesDir, scriptName)
 
 	return r
 }

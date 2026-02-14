@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/thinkingscript/cli/internal/arguments"
 	"github.com/thinkingscript/cli/internal/ui"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
@@ -21,29 +20,27 @@ var ErrInterrupted = errors.New("interrupted")
 type Decision string
 
 const (
-	DecisionAllow         Decision = "allow"
-	DecisionDeny          Decision = "deny"
-	DecisionAlwaysYes     Decision = "always_yes"
-	DecisionAlwaysSimilar Decision = "always_similar"
+	DecisionAllow     Decision = "allow"
+	DecisionDeny      Decision = "deny"
+	DecisionAlwaysYes Decision = "always_yes"
+	DecisionAllowAll  Decision = "allow_all" // session-scoped, not persisted
 )
 
 type StoredApprovals struct {
-	Commands        map[string]Decision `json:"commands"`
-	EnvVars         map[string]Decision `json:"env_vars"`
-	Arguments       map[string]Decision `json:"arguments"`
-	CommandPatterns map[string]Decision `json:"command_patterns,omitempty"`
+	EnvVars map[string]Decision `json:"env_vars"`
+	Paths   map[string]Decision `json:"paths"`
 }
 
 type Approver struct {
-	wreckless bool
-	cacheDir  string
-	stored    *StoredApprovals
-	isTTY     bool
-	argStore  *arguments.Store
-	ttyInput  *os.File
+	cacheDir        string
+	stored          *StoredApprovals
+	isTTY           bool
+	ttyInput        *os.File
+	sessionAllowEnv bool // "Allow all env reads" for this session
+	sessionAllowFS  bool // "Allow all path access" for this session
 }
 
-func NewApprover(wreckless bool, cacheDir string, argStore *arguments.Store) *Approver {
+func NewApprover(cacheDir string) *Approver {
 	isTTY := term.IsTerminal(int(os.Stderr.Fd()))
 
 	// When stdin is a pipe but stderr is a terminal, open /dev/tty
@@ -57,12 +54,10 @@ func NewApprover(wreckless bool, cacheDir string, argStore *arguments.Store) *Ap
 	}
 
 	a := &Approver{
-		wreckless: wreckless,
-		cacheDir:  cacheDir,
-		isTTY:     isTTY,
-		argStore:  argStore,
-		ttyInput:  ttyInput,
-		stored:    &StoredApprovals{},
+		cacheDir: cacheDir,
+		isTTY:    isTTY,
+		ttyInput: ttyInput,
+		stored:   &StoredApprovals{},
 	}
 	a.loadStored()
 	return a
@@ -76,64 +71,59 @@ func (a *Approver) Close() {
 	}
 }
 
-func (a *Approver) ApproveCommand(command string) (bool, error) {
-	if a.wreckless {
+func (a *Approver) ApprovePath(op, path string) (bool, error) {
+	if a.sessionAllowFS {
 		return true, nil
 	}
 
-	// Check exact match
-	if d, ok := a.stored.Commands[command]; ok {
-		return d == DecisionAllow || d == DecisionAlwaysYes, nil
-	}
-
-	// Check pattern matches
-	args := a.argStore.Snapshot()
-	for pattern, d := range a.stored.CommandPatterns {
-		if patternMatchesCommand(pattern, command, args) {
-			return d == DecisionAlwaysSimilar, nil
-		}
+	// Check if this path (or any parent) is already approved.
+	if a.pathApproved(path) {
+		return true, nil
 	}
 
 	if !a.isTTY {
 		return false, nil
 	}
 
-	// Determine if named arguments appear in the command (enables "similar" option)
-	hasArgs := commandContainsArgument(command, args)
-
-	decision, err := a.promptCommand(command, hasArgs, args)
+	decision, err := a.promptWithBatch(op, path)
 	if err != nil {
 		return false, err
 	}
 
 	switch decision {
 	case DecisionAlwaysYes:
-		a.stored.Commands[command] = DecisionAlwaysYes
+		a.stored.Paths[path] = DecisionAlwaysYes
 		a.saveStored()
-	case DecisionAlwaysSimilar:
-		pattern := commandToPattern(command, args)
-		a.stored.CommandPatterns[pattern] = DecisionAlwaysSimilar
-		a.saveStored()
+	case DecisionAllowAll:
+		a.sessionAllowFS = true
 	}
 
-	return decision == DecisionAllow || decision == DecisionAlwaysYes || decision == DecisionAlwaysSimilar, nil
+	return decision == DecisionAllow || decision == DecisionAlwaysYes || decision == DecisionAllowAll, nil
+}
+
+// pathApproved checks if the given path or any of its parent directories
+// has been approved. This means approving /Users/brad covers /Users/brad/foo.jpg.
+func (a *Approver) pathApproved(path string) bool {
+	for approved, d := range a.stored.Paths {
+		if d != DecisionAlwaysYes {
+			continue
+		}
+		if path == approved || strings.HasPrefix(path, approved+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *Approver) ApproveEnvRead(varName string) (bool, error) {
-	return a.approveSimple(a.stored.EnvVars, "read_env", varName)
-}
-
-func (a *Approver) ApproveArgument(detail string) (bool, error) {
-	return a.approveSimple(a.stored.Arguments, "set_argument", detail)
-}
-
-// approveSimple handles the standard approval flow for simple tool actions
-// (env reads, argument assignments). Commands use their own flow with pattern matching.
-func (a *Approver) approveSimple(stored map[string]Decision, label, key string) (bool, error) {
-	if a.wreckless {
+	if a.sessionAllowEnv {
 		return true, nil
 	}
+	return a.approveWithBatch(a.stored.EnvVars, "env", varName, &a.sessionAllowEnv)
+}
 
+// approveWithBatch handles approval with a session-level "Allow all" option.
+func (a *Approver) approveWithBatch(stored map[string]Decision, label, key string, sessionAllow *bool) (bool, error) {
 	if d, ok := stored[key]; ok {
 		return d == DecisionAlwaysYes, nil
 	}
@@ -142,17 +132,20 @@ func (a *Approver) approveSimple(stored map[string]Decision, label, key string) 
 		return false, nil
 	}
 
-	decision, err := a.prompt(label, key)
+	decision, err := a.promptWithBatch(label, key)
 	if err != nil {
 		return false, err
 	}
 
-	if decision == DecisionAlwaysYes {
+	switch decision {
+	case DecisionAlwaysYes:
 		stored[key] = DecisionAlwaysYes
 		a.saveStored()
+	case DecisionAllowAll:
+		*sessionAllow = true
 	}
 
-	return decision == DecisionAllow || decision == DecisionAlwaysYes, nil
+	return decision == DecisionAllow || decision == DecisionAlwaysYes || decision == DecisionAllowAll, nil
 }
 
 var (
@@ -171,7 +164,7 @@ func indentedTheme() *huh.Theme {
 	return t
 }
 
-func (a *Approver) promptCommand(command string, hasArgs bool, args []arguments.Argument) (Decision, error) {
+func (a *Approver) promptWithBatch(label, detail string) (Decision, error) {
 	lock, err := acquirePromptLock()
 	if err != nil {
 		return DecisionDeny, fmt.Errorf("acquiring prompt lock: %w", err)
@@ -179,59 +172,7 @@ func (a *Approver) promptCommand(command string, hasArgs bool, args []arguments.
 	defer releasePromptLock(lock)
 
 	fmt.Fprintf(os.Stderr, "\n  %s %s\n",
-		labelStyle.Render("$"),
-		cmdStyle.Render(truncate(command, 200)))
-
-	options := []huh.Option[string]{
-		huh.NewOption("Yes", "yes"),
-		huh.NewOption("Always", "always"),
-	}
-
-	if hasArgs {
-		pattern := commandToPattern(command, args)
-		label := fmt.Sprintf("Always similar (%s)", truncate(pattern, 60))
-		options = append(options, huh.NewOption(label, "always_similar"))
-	}
-
-	options = append(options, huh.NewOption("No", "no"))
-
-	var choice string
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Options(options...).
-				Value(&choice),
-		),
-	).WithTheme(indentedTheme()).WithOutput(os.Stderr)
-
-	if a.ttyInput != nil {
-		form = form.WithInput(a.ttyInput)
-	}
-
-	if err := form.Run(); err != nil {
-		return DecisionDeny, ErrInterrupted
-	}
-
-	switch choice {
-	case "yes":
-		return DecisionAllow, nil
-	case "always":
-		return DecisionAlwaysYes, nil
-	case "always_similar":
-		return DecisionAlwaysSimilar, nil
-	default:
-		return DecisionDeny, nil
-	}
-}
-
-func (a *Approver) prompt(toolName, detail string) (Decision, error) {
-	lock, err := acquirePromptLock()
-	if err != nil {
-		return DecisionDeny, fmt.Errorf("acquiring prompt lock: %w", err)
-	}
-	defer releasePromptLock(lock)
-
-	fmt.Fprintf(os.Stderr, "\n  %s\n",
+		labelStyle.Render(label),
 		cmdStyle.Render(truncate(detail, 200)))
 
 	var choice string
@@ -240,6 +181,7 @@ func (a *Approver) prompt(toolName, detail string) (Decision, error) {
 			huh.NewSelect[string]().
 				Options(
 					huh.NewOption("Yes", "yes"),
+					huh.NewOption("Allow all", "allow_all"),
 					huh.NewOption("Always", "always"),
 					huh.NewOption("No", "no"),
 				).
@@ -252,12 +194,14 @@ func (a *Approver) prompt(toolName, detail string) (Decision, error) {
 	}
 
 	if err := form.Run(); err != nil {
-		return DecisionDeny, ErrInterrupted
+		os.Exit(130)
 	}
 
 	switch choice {
 	case "yes":
 		return DecisionAllow, nil
+	case "allow_all":
+		return DecisionAllowAll, nil
 	case "always":
 		return DecisionAlwaysYes, nil
 	default:
@@ -269,22 +213,18 @@ func (a *Approver) loadStored() {
 	if a.cacheDir != "" {
 		path := filepath.Join(a.cacheDir, "approvals.json")
 		if data, err := os.ReadFile(path); err == nil {
-			_ = json.Unmarshal(data, a.stored)
+			if err := json.Unmarshal(data, a.stored); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: corrupted approvals file, re-prompting for approvals: %v\n", err)
+			}
 		}
 	}
 
 	// Ensure all maps are initialized (covers fresh start and old JSON formats).
-	if a.stored.Commands == nil {
-		a.stored.Commands = make(map[string]Decision)
-	}
 	if a.stored.EnvVars == nil {
 		a.stored.EnvVars = make(map[string]Decision)
 	}
-	if a.stored.Arguments == nil {
-		a.stored.Arguments = make(map[string]Decision)
-	}
-	if a.stored.CommandPatterns == nil {
-		a.stored.CommandPatterns = make(map[string]Decision)
+	if a.stored.Paths == nil {
+		a.stored.Paths = make(map[string]Decision)
 	}
 }
 
@@ -310,34 +250,3 @@ func truncate(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
-// commandToPattern replaces named argument values in a command with {Name} placeholders.
-// Arguments are processed longest-first to prevent partial matches.
-func commandToPattern(command string, args []arguments.Argument) string {
-	pattern := command
-	for _, a := range args {
-		if a.Value != "" {
-			pattern = strings.ReplaceAll(pattern, a.Value, "{"+a.Name+"}")
-		}
-	}
-	return pattern
-}
-
-// patternMatchesCommand checks if a stored pattern matches the given command
-// by substituting current argument values into the pattern's placeholders.
-func patternMatchesCommand(pattern, command string, args []arguments.Argument) bool {
-	expanded := pattern
-	for _, a := range args {
-		expanded = strings.ReplaceAll(expanded, "{"+a.Name+"}", a.Value)
-	}
-	return expanded == command
-}
-
-// commandContainsArgument reports whether any named argument value appears in the command.
-func commandContainsArgument(command string, args []arguments.Argument) bool {
-	for _, a := range args {
-		if a.Value != "" && strings.Contains(command, a.Value) {
-			return true
-		}
-	}
-	return false
-}

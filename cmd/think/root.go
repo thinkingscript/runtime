@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/thinkingscript/cli/internal/agent"
 	"github.com/thinkingscript/cli/internal/approval"
-	"github.com/thinkingscript/cli/internal/arguments"
 	"github.com/thinkingscript/cli/internal/config"
 	"github.com/thinkingscript/cli/internal/provider"
 	"github.com/thinkingscript/cli/internal/script"
@@ -37,8 +37,21 @@ func init() {
 	rootCmd.Flags().SetInterspersed(false)
 }
 
+// cacheMode returns the cache behavior: "persist" (default), "ephemeral", or "off".
+func cacheMode() string {
+	switch strings.ToLower(os.Getenv("THINKINGSCRIPT__CACHE")) {
+	case "off", "none", "disable":
+		return "off"
+	case "ephemeral", "tmp":
+		return "ephemeral"
+	default:
+		return "persist"
+	}
+}
+
 func runScript(cmd *cobra.Command, args []string) error {
 	scriptPath := args[0]
+	mode := cacheMode()
 
 	// Parse script
 	parsed, err := script.Parse(scriptPath)
@@ -60,13 +73,19 @@ func runScript(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("computing cache dir: %w", err)
 	}
 
+	if mode == "off" {
+		// No persistent cache — always start fresh, clean up on exit
+		os.RemoveAll(cacheDir)
+		defer os.RemoveAll(cacheDir)
+	}
+
 	// Check fingerprint and manage cache
 	if config.CheckFingerprint(cacheDir, parsed.Fingerprint) {
 		// Cache is valid, reuse approvals
 	} else {
 		// Cache is stale or doesn't exist — wipe and recreate
 		os.RemoveAll(cacheDir)
-		if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		if err := os.MkdirAll(cacheDir, 0700); err != nil {
 			return fmt.Errorf("creating cache dir: %w", err)
 		}
 		if err := config.WriteFingerprint(cacheDir, parsed.Fingerprint); err != nil {
@@ -75,6 +94,10 @@ func runScript(cmd *cobra.Command, args []string) error {
 		if err := config.WriteMeta(cacheDir, scriptPath); err != nil {
 			return fmt.Errorf("writing meta: %w", err)
 		}
+	}
+
+	if mode == "ephemeral" {
+		defer os.RemoveAll(cacheDir)
 	}
 
 	// Read stdin if piped
@@ -87,13 +110,19 @@ func runScript(cmd *cobra.Command, args []string) error {
 		stdinData = string(data)
 	}
 
-	// Set up named arguments store and approval system
-	argStore := arguments.NewStore()
-	approver := approval.NewApprover(resolved.Wreckless, cacheDir, argStore)
+	// Set up approval system
+	approver := approval.NewApprover(cacheDir)
 	defer approver.Close()
 
+	// Set up sandbox paths
+	workDir, _ := os.Getwd()
+	workspaceDir := filepath.Join(cacheDir, "workspace")
+	os.MkdirAll(workspaceDir, 0700)
+	memoriesDir := config.MemoriesDir(scriptPath)
+	os.MkdirAll(memoriesDir, 0700)
+
 	// Set up tool registry
-	registry := tools.NewRegistry(approver, stdinData, argStore)
+	registry := tools.NewRegistry(approver, workDir, workspaceDir, memoriesDir, scriptPath)
 
 	// Create provider
 	p, err := createProvider(resolved)
@@ -101,14 +130,17 @@ func runScript(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Build prompt: script content + any CLI arguments
+	// Build prompt: script content + stdin + CLI arguments
 	prompt := parsed.Prompt
+	if stdinData != "" {
+		prompt += "\n\nStdin:\n" + stdinData
+	}
 	if len(args) > 1 {
 		prompt += "\n\nArguments: " + strings.Join(args[1:], " ")
 	}
 
 	// Run agent loop
-	a := agent.New(p, registry, resolved.Model, resolved.MaxTokens, resolved.MaxIterations, scriptPath)
+	a := agent.New(p, registry, resolved.Model, resolved.MaxTokens, resolved.MaxIterations, scriptPath, workspaceDir, memoriesDir, mode)
 	return a.Run(cmd.Context(), prompt)
 }
 
