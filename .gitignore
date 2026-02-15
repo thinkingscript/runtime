@@ -2,6 +2,7 @@
 bin/
 /think
 /thought
+/home
 
 # Go
 *.exe

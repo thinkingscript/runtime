@@ -8,6 +8,21 @@ A Go CLI with two binaries:
 
 Repo: `thinkingscript/cli`.
 
+## Quick Setup
+
+```bash
+# 1. Set your API key
+export THINKINGSCRIPT__ANTHROPIC__API_KEY=sk-ant-...
+
+# 2. Build
+make build
+
+# 3. Run a script
+./bin/think examples/weather.md "San Francisco"
+```
+
+For development, set `THINKINGSCRIPT_HOME=./thinkingscript` to avoid writing to `~/.thinkingscript/`.
+
 ## Architecture
 
 ```
@@ -29,14 +44,14 @@ internal/approval/       → Charm huh approval prompts + persistence
 ### Wiring (cmd/think/root.go)
 
 Everything is wired in `runScript()`:
-1. `approval.NewApprover(cacheDir)` — approval system for env reads and path access
+1. `approval.NewApprover(thoughtDir, globalPolicyPath)` — policy-based approval system
 2. `tools.NewRegistry(approver, workDir, workspaceDir)` — tool registry with two tools
 
 Stdin data and CLI arguments are injected directly into the prompt (no tool call needed).
 
 ### Security Model: The Sandbox Boundary
 
-**The sandbox (goja JS runtime) is the security boundary.** Filesystem access within CWD and workspace is unrestricted. Accessing paths outside these directories prompts the user for approval. Environment variable reads prompt the user for approval. Network access is unrestricted. There is no shell access — system introspection (CPU, memory, uptime, load) is provided through the `sys` bridge.
+**The sandbox (goja JS runtime) is the security boundary.** CWD is read-only — reads are unrestricted but writes to CWD require user approval. Workspace and memories directories are fully read-write. Accessing paths outside these directories prompts the user for approval. Environment variable reads prompt the user for approval. Network access requires user approval. There is no shell access — system introspection (CPU, memory, uptime, load) is provided through the `sys` bridge.
 
 CommonJS `require()` is available for loading modules. Modules are loaded through the same sandbox path checks — paths inside CWD/workspace load freely, paths outside require approval.
 
@@ -54,8 +69,8 @@ Tools: `write_stdout`, `run_script`.
 ### Sandbox (internal/sandbox/)
 
 The JS runtime uses `github.com/dop251/goja` (pure Go, no CGo) with `goja_nodejs` for CommonJS `require()` support. Bridge files:
-- `bridge_fs.go` — `fs.readFile`, `fs.writeFile`, `fs.appendFile`, `fs.readDir`, `fs.stat`, `fs.exists`, `fs.delete`, `fs.mkdir`, `fs.copy`, `fs.move`, `fs.glob` (CWD + workspace free; other paths prompt for approval)
-- `bridge_net.go` — `net.fetch(url, options?)` (unrestricted)
+- `bridge_fs.go` — `fs.readFile`, `fs.writeFile`, `fs.appendFile`, `fs.readDir`, `fs.stat`, `fs.exists`, `fs.delete`, `fs.mkdir`, `fs.copy`, `fs.move`, `fs.glob` (CWD read-only; workspace + memories read-write; other paths prompt for approval)
+- `bridge_net.go` — `net.fetch(url, options?)` (requires user approval)
 - `bridge_env.go` — `env.get(name)` (prompts user for approval)
 - `bridge_sys.go` — `sys.platform()`, `sys.arch()`, `sys.cpus()`, `sys.totalmem()`, `sys.freemem()`, `sys.uptime()`, `sys.loadavg()` (system introspection)
 - `bridge_console.go` — `console.log`, `console.error` → stderr
@@ -70,13 +85,26 @@ Key details:
 
 ### Approval System
 
-Two approval flows via `approveSimple()` in `approval.go`:
+Three approval flows in `approval.go`:
+- **`ApproveNet`** — for network access (`net.fetch`)
 - **`ApprovePath`** — for filesystem access outside CWD/workspace
 - **`ApproveEnvRead`** — for environment variable reads
 
-Both follow the same pattern: stored lookup → prompt with Yes/Always/No options.
+All follow the same pattern: thought policy → global policy → prompt with Yes/Allow all/Always/No options.
 
-Approvals persist to `<cacheDir>/approvals.json` with maps for: env_vars, paths.
+Policies are YAML files:
+- `~/.thinkingscript/policy.yaml` — global defaults (read-only)
+- `~/.thinkingscript/thoughts/<name>/policy.yaml` — per-thought overrides (read-write, answers saved here)
+
+```yaml
+net: allow
+env:
+  ANTHROPIC_API_KEY: allow
+paths:
+  /Users/brad/data: allow
+```
+
+Values are `allow` or `deny`. Absent keys mean "not decided yet" → prompt user at runtime.
 
 ### System Prompt (internal/agent/agent.go)
 
@@ -87,12 +115,11 @@ When modifying the system prompt, be direct and explicit — especially for smal
 ## Key Conventions
 
 - **stdout is sacred**: Only `write_stdout` tool writes to stdout. All debug/UI → stderr.
-- **Sandbox is the boundary**: fs/net/sys run free inside CWD + workspace. Paths outside and env reads require user approval. No shell access. `require()` available for CommonJS modules.
+- **Sandbox is the boundary**: CWD is read-only; workspace + memories are read-write. Network access, writes to CWD, paths outside, and env reads require user approval. No shell access. `require()` available for CommonJS modules.
 - **Provider interface**: Agent loop is decoupled from any specific LLM SDK.
 - **Keep primitives simple**: Small, focused tools that stack on each other. Don't over-architect.
 - **`think` is the interpreter**, **`thought` is the management tool**. Scripts are `.thought` files, shebangs are `#!/usr/bin/env think`.
 - Config precedence: env vars (`THINKINGSCRIPT__*`) > frontmatter > `~/.thinkingscript/` > defaults.
-- Home dir: `~/.thinkingscript/` (overridable via `THINKINGSCRIPT_HOME`).
 
 ## Code Style
 
@@ -111,6 +138,43 @@ make build
 ./bin/thought cache examples/weather.md
 ./bin/thought build input.thought -o output.thought
 ```
+
+## Configuration
+
+Home dir: `~/.thinkingscript/` (overridable via `THINKINGSCRIPT_HOME`).
+
+```
+~/.thinkingscript/
+  config.yaml              # Global settings (agent, max_tokens, max_iterations)
+  policy.yaml              # Global default policy (net, env, paths)
+  agents/                  # Provider configs (anthropic.yaml, local.yaml, etc.)
+  bin/                     # Installed thought binaries (added to PATH)
+  thoughts/
+    <name>/
+      policy.yaml          # Per-thought policy (overrides global)
+      workspace/           # Per-thought working directory
+      memories/            # Per-thought persistent memories
+  cache/<hash>/            # Fingerprint-gated, per-script-path
+    fingerprint
+    meta.yaml
+```
+
+### Environment Variables
+
+Config env vars use the `THINKINGSCRIPT__` prefix (double underscore):
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `THINKINGSCRIPT_HOME` | Override home directory | `~/.thinkingscript` |
+| `THINKINGSCRIPT__AGENT` | Agent name to use | `anthropic` |
+| `THINKINGSCRIPT__MODEL` | Model override | Agent's model |
+| `THINKINGSCRIPT__MAX_TOKENS` | Max tokens per response | `4096` |
+| `THINKINGSCRIPT__CACHE` | Cache mode: `persist`, `ephemeral`, `off` | `persist` |
+| `THINKINGSCRIPT__ANTHROPIC__API_KEY` | Anthropic API key | — |
+| `THINKINGSCRIPT__OPENAI__API_KEY` | OpenAI-compatible API key | — |
+| `THINKINGSCRIPT__OPENAI__API_BASE` | OpenAI-compatible base URL | — |
+
+Note: `THINKINGSCRIPT_HOME` uses a single underscore (it's not a config override, it's a path).
 
 ## Dependencies
 

@@ -26,6 +26,20 @@ func (s *Sandbox) registerNet(vm *goja.Runtime) {
 	net := vm.NewObject()
 
 	net.Set("fetch", func(call goja.FunctionCall) goja.Value {
+		// Check network access approval
+		if s.cfg.ApproveNet != nil {
+			allowed, err := s.cfg.ApproveNet()
+			if err != nil {
+				s.checkInterrupted(err)
+				throwError(vm, fmt.Sprintf("net.fetch: %s", err.Error()))
+			}
+			if !allowed {
+				throwError(vm, "net.fetch: network access denied")
+			}
+		} else {
+			throwError(vm, "net.fetch: network access denied (no approval handler)")
+		}
+
 		url := call.Argument(0).String()
 
 		// Parse options (method, headers, body)

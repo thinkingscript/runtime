@@ -17,22 +17,25 @@ import (
 
 // Config holds everything needed to create a sandbox.
 type Config struct {
-	AllowedPaths []string      // Resolved absolute paths the sandbox may access freely (CWD, workspace)
-	WorkDir      string        // CWD for relative path resolution
-	Stderr       io.Writer     // Where console.log goes
-	Args         []string      // Script arguments
-	Timeout      time.Duration // Max execution time (default 30s)
-	ApprovePath func(op, path string) (bool, error) // Called for paths outside AllowedPaths; nil = deny all
-	ApproveEnv  func(name string) (bool, error) // Called before reading env vars; nil = allow all
-	OnWrite     func(path, content string)      // Called after successful file writes; nil = no-op
+	AllowedPaths  []string      // Resolved absolute paths the sandbox may read freely (CWD, workspace)
+	WritablePaths []string      // Resolved absolute paths the sandbox may write freely (workspace, memories)
+	WorkDir       string        // CWD for relative path resolution
+	Stderr        io.Writer     // Where console.log goes
+	Args          []string      // Script arguments
+	Timeout       time.Duration // Max execution time (default 30s)
+	ApprovePath   func(op, path string) (bool, error) // Called for paths outside AllowedPaths/WritablePaths; nil = deny all
+	ApproveEnv    func(name string) (bool, error) // Called before reading env vars; nil = allow all
+	ApproveNet    func() (bool, error)           // Called before network access; nil = deny all
+	OnWrite       func(path, content string)      // Called after successful file writes; nil = no-op
 }
 
 // Sandbox executes JavaScript code with restricted filesystem access.
 type Sandbox struct {
-	cfg          Config
-	allowedPaths []string // resolved + cleaned allowed paths
-	ctx          context.Context
-	interrupted  bool // set when a user prompt is interrupted (Ctrl+C)
+	cfg           Config
+	allowedPaths  []string // resolved + cleaned allowed paths (reads)
+	writablePaths []string // resolved + cleaned writable paths (writes/deletes)
+	ctx           context.Context
+	interrupted   bool // set when a user prompt is interrupted (Ctrl+C)
 }
 
 // New creates a Sandbox. AllowedPaths are resolved via EvalSymlinks at
@@ -53,6 +56,19 @@ func New(cfg Config) (*Sandbox, error) {
 		resolved = append(resolved, real)
 	}
 
+	writable := make([]string, 0, len(cfg.WritablePaths))
+	for _, p := range cfg.WritablePaths {
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return nil, fmt.Errorf("resolving writable path %q: %w", p, err)
+		}
+		real, err := filepath.EvalSymlinks(abs)
+		if err != nil {
+			real = abs
+		}
+		writable = append(writable, real)
+	}
+
 	if cfg.Stderr == nil {
 		cfg.Stderr = os.Stderr
 	}
@@ -64,7 +80,7 @@ func New(cfg Config) (*Sandbox, error) {
 		}
 	}
 
-	return &Sandbox{cfg: cfg, allowedPaths: resolved}, nil
+	return &Sandbox{cfg: cfg, allowedPaths: resolved, writablePaths: writable}, nil
 }
 
 // Run executes JavaScript code and returns the last expression value as a string.
@@ -168,7 +184,12 @@ func (s *Sandbox) resolvePath(op, userPath string) (string, error) {
 		real = filepath.Join(realParent, filepath.Base(abs))
 	}
 
-	for _, allowed := range s.allowedPaths {
+	// For write/delete ops, check writable paths; for read/list, check allowed paths.
+	checkPaths := s.allowedPaths
+	if op == "write" || op == "delete" {
+		checkPaths = s.writablePaths
+	}
+	for _, allowed := range checkPaths {
 		if real == allowed || strings.HasPrefix(real, allowed+string(filepath.Separator)) {
 			return real, nil
 		}

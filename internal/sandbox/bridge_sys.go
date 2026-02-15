@@ -61,7 +61,7 @@ func (s *Sandbox) registerSys(vm *goja.Runtime) {
 		if w, h, err := term.GetSize(int(os.Stderr.Fd())); err == nil {
 			columns, rows = w, h
 		}
-		colorSupport := isTTY && os.Getenv("NO_COLOR") == ""
+		colorSupport := isTTY
 		return vm.ToValue(map[string]any{
 			"columns": columns,
 			"rows":    rows,

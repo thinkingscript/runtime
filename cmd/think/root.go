@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"path/filepath"
+
 	"github.com/thinkingscript/cli/internal/agent"
 	"github.com/thinkingscript/cli/internal/approval"
 	"github.com/thinkingscript/cli/internal/config"
@@ -110,14 +112,16 @@ func runScript(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set up approval system
-	approver := approval.NewApprover(cacheDir)
+	thoughtDir, _ := filepath.Abs(config.ThoughtDir(scriptPath))
+	globalPolicyPath, _ := filepath.Abs(filepath.Join(config.HomeDir(), "policy.yaml"))
+	approver := approval.NewApprover(thoughtDir, globalPolicyPath)
 	defer approver.Close()
 
-	// Set up sandbox paths
+	// Set up sandbox paths — resolve to absolute so the LLM sees full paths
 	workDir, _ := os.Getwd()
-	workspaceDir := config.WorkspaceDir(scriptPath)
+	workspaceDir, _ := filepath.Abs(config.WorkspaceDir(scriptPath))
 	os.MkdirAll(workspaceDir, 0700)
-	memoriesDir := config.MemoriesDir(scriptPath)
+	memoriesDir, _ := filepath.Abs(config.MemoriesDir(scriptPath))
 	os.MkdirAll(memoriesDir, 0700)
 
 	// Set up tool registry

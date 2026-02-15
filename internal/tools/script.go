@@ -44,11 +44,13 @@ func (r *Registry) registerScript(approver *approval.Approver, workDir, workspac
 		detailStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
 
 		sb, err := sandbox.New(sandbox.Config{
-			AllowedPaths: []string{workDir, workspaceDir, memoriesDir},
-			WorkDir:      workDir,
+			AllowedPaths:  []string{workDir, workspaceDir, memoriesDir},
+			WritablePaths: []string{workspaceDir, memoriesDir},
+			WorkDir:       workDir,
 			Stderr:       os.Stderr,
 			ApprovePath:  approver.ApprovePath,
 			ApproveEnv:   approver.ApproveEnvRead,
+			ApproveNet:   approver.ApproveNet,
 			OnWrite: func(path, content string) {
 				if strings.HasPrefix(path, memoriesPrefix) {
 					name := filepath.Base(path)
