@@ -25,4 +25,5 @@ func init() {
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(memoryCmd)
 	rootCmd.AddCommand(workspaceCmd)
+	rootCmd.AddCommand(setupCmd)
 }

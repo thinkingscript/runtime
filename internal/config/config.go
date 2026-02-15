@@ -144,6 +144,23 @@ func LoadAgent(name string) *AgentConfig {
 	return agent
 }
 
+// SaveAgent writes an agent config to the agents directory with 0600 permissions.
+func SaveAgent(name string, agent *AgentConfig) error {
+	dir := filepath.Join(HomeDir(), "agents")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("creating agents directory: %w", err)
+	}
+	data, err := yaml.Marshal(agent)
+	if err != nil {
+		return fmt.Errorf("marshaling agent config: %w", err)
+	}
+	path := filepath.Join(dir, name+".yaml")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("writing agent config: %w", err)
+	}
+	return nil
+}
+
 // Resolve merges config layers: defaults < config.yaml < agent.yaml < frontmatter < env vars
 func Resolve(scriptCfg *ScriptConfig) *ResolvedConfig {
 	cfg := LoadConfig()
