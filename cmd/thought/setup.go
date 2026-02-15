@@ -99,8 +99,11 @@ func promptAPIKey(existing string) (string, error) {
 	placeholder := "sk-ant-..."
 	description := "Enter your Anthropic API key"
 	if existing != "" {
-		masked := existing[:7] + strings.Repeat("*", len(existing)-11) + existing[len(existing)-4:]
-		placeholder = masked
+		if len(existing) > 11 {
+			placeholder = existing[:7] + strings.Repeat("*", len(existing)-11) + existing[len(existing)-4:]
+		} else {
+			placeholder = strings.Repeat("*", len(existing))
+		}
 		description = "Enter a new API key or press Enter to keep existing"
 	}
 

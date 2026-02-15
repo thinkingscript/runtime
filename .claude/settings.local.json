@@ -34,7 +34,15 @@
       "Bash(go test:*)",
       "Bash(go mod verify:*)",
       "Bash(go vet:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git -C /Users/bradgessler/Projects/thinkingscript/cli diff)",
+      "Bash(git -C /Users/bradgessler/Projects/thinkingscript/cli log --oneline -5)",
+      "Bash(git -C /Users/bradgessler/Projects/thinkingscript/cli add cmd/think/root.go cmd/thought/cache.go cmd/thought/install.go cmd/thought/mem.go cmd/thought/workspace.go internal/config/config.go)",
+      "Bash(git -C:*)",
+      "Bash(git push:*)",
+      "Bash(cat:*)",
+      "Bash(./bin/thought:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
