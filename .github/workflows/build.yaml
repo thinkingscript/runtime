@@ -6,6 +6,9 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,3 +35,16 @@ jobs:
         with:
           name: thinkingscript-snapshot-windows
           path: dist/*.zip
+
+      - name: Publish edge release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete edge --yes --cleanup-tag 2>/dev/null || true
+          git tag -f edge
+          git push -f origin edge
+          gh release create edge dist/*.tar.gz dist/*.zip \
+            --prerelease \
+            --title "Edge" \
+            --notes "Built from main at $(git rev-parse --short HEAD). Not a stable release."
