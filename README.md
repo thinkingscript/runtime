@@ -57,6 +57,14 @@ chmod +x hello.ai
 ./hello.ai
 ```
 
+You can also run thoughts directly from a URL:
+
+```bash
+think https://raw.githubusercontent.com/thinkingscript/thoughts/main/weather.md "NYC"
+```
+
+When running from a URL, `think` displays the thought content and asks for confirmation before executing.
+
 ## The Shebang
 
 The first line `#!/usr/bin/env agent-exec` tells your OS to use agent-exec as the interpreter. Everything after the shebang (minus optional frontmatter) becomes the prompt sent to the LLM.
@@ -134,7 +142,7 @@ See [Frontmatter](#frontmatter) above.
 │   ├── anthropic.yaml   # Anthropic agent definition
 │   └── local.yaml       # Local/Ollama agent definition
 └── cache/
-    └── <hash>/          # Per-script cache (auto-managed)
+    └── <fingerprint>/   # Per-script cache (content-addressed)
         ├── fingerprint
         ├── approvals.json
         └── meta.json
@@ -204,20 +212,20 @@ cat data.csv | ./summarize.ai > summary.txt
 
 ## Cache Management
 
-Each script gets a cache directory (keyed by absolute path hash) that stores approval decisions and metadata. The cache is automatically invalidated when script content changes.
+Each script gets a cache directory keyed by its content fingerprint. This means the same script content produces the same cache whether run from a local file or a URL. The cache is automatically invalidated when script content or the `think` binary changes.
 
 ```bash
 # Print cache directory for a script
-agent-exec cache ./hello.ai
+thought cache ./hello.ai
 
 # List cache contents
-ls $(agent-exec cache ./hello.ai)
+ls $(thought cache ./hello.ai)
 
 # Clear cache for a specific script
-agent-exec cache --clear ./hello.ai
+thought cache --clear ./hello.ai
 
 # Clear all caches
-agent-exec cache --clear-all
+thought cache --clear-all
 ```
 
 ## Examples
