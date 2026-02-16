@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/thinkingscript/cli/internal/config"
+	"github.com/thinkingscript/cli/internal/script"
 	"github.com/spf13/cobra"
 )
 
@@ -46,10 +47,11 @@ func runCache(cmd *cobra.Command, args []string) error {
 	}
 
 	scriptPath := args[0]
-	cacheDir, err := config.CacheDir(scriptPath)
+	parsed, err := script.Parse(scriptPath)
 	if err != nil {
-		return fmt.Errorf("computing cache dir: %w", err)
+		return fmt.Errorf("parsing script: %w", err)
 	}
+	cacheDir := config.CacheDir(parsed.Fingerprint)
 
 	if clearFlag {
 		if err := os.RemoveAll(cacheDir); err != nil {

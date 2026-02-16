@@ -3,7 +3,9 @@ package config
 import (
 	"crypto/sha256"
 	"fmt"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -76,12 +78,17 @@ func EnsureHomeDir() error {
 	return nil
 }
 
-// ThoughtName derives a human-readable name from a script path.
-// "examples/weather.md" → "weather", "my-stocks.thought" → "my-stocks"
+// ThoughtName derives a human-readable name from a script path or URL.
+// "examples/weather.md" → "weather", "https://example.com/weather.md?v=2" → "weather"
 func ThoughtName(scriptPath string) string {
-	base := filepath.Base(scriptPath)
-	ext := filepath.Ext(base)
-	return strings.TrimSuffix(base, ext)
+	name := scriptPath
+	if u, err := url.Parse(scriptPath); err == nil && u.Scheme != "" {
+		name = path.Base(u.Path)
+	} else {
+		name = filepath.Base(scriptPath)
+	}
+	ext := filepath.Ext(name)
+	return strings.TrimSuffix(name, ext)
 }
 
 // BinDir returns the directory for installed thought binaries.
@@ -230,15 +237,15 @@ func getEnv(key string) string {
 	return os.Getenv("THINKINGSCRIPT__" + key)
 }
 
-// CacheDir returns the cache directory path for a given script path.
-func CacheDir(scriptPath string) (string, error) {
-	absPath, err := filepath.Abs(scriptPath)
-	if err != nil {
-		return "", err
+// CacheDir returns the cache directory path for a given fingerprint.
+// Same content produces the same cache dir regardless of source (file or URL).
+// The fingerprint is already a hex-encoded hash, so we truncate rather than re-hash.
+func CacheDir(fingerprint string) string {
+	short := fingerprint
+	if len(short) > 32 {
+		short = short[:32]
 	}
-	hash := sha256.Sum256([]byte(absPath))
-	shortHash := fmt.Sprintf("%x", hash[:16])
-	return filepath.Join(HomeDir(), "cache", shortHash), nil
+	return filepath.Join(HomeDir(), "cache", short)
 }
 
 // Fingerprint computes a SHA-256 hash of the given data combined with the

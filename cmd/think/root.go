@@ -9,6 +9,8 @@ import (
 
 	"path/filepath"
 
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/thinkingscript/cli/internal/agent"
 	"github.com/thinkingscript/cli/internal/approval"
 	"github.com/thinkingscript/cli/internal/config"
@@ -60,6 +62,17 @@ func runScript(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// If from a URL, show the thought content and confirm before running
+	if parsed.IsURL {
+		ok, err := confirmURLThought(parsed)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+	}
+
 	// Resolve configuration
 	resolved := config.Resolve(parsed.Config)
 
@@ -69,10 +82,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set up cache directory
-	cacheDir, err := config.CacheDir(scriptPath)
-	if err != nil {
-		return fmt.Errorf("computing cache dir: %w", err)
-	}
+	cacheDir := config.CacheDir(parsed.Fingerprint)
 
 	if mode == "off" {
 		// No persistent cache — always start fresh, clean up on exit
@@ -145,6 +155,29 @@ func runScript(cmd *cobra.Command, args []string) error {
 	// Run agent loop
 	a := agent.New(p, registry, resolved.Model, resolved.MaxTokens, resolved.MaxIterations, scriptPath, workspaceDir, memoriesDir, mode)
 	return a.Run(cmd.Context(), prompt)
+}
+
+func confirmURLThought(parsed *script.ParsedScript) (bool, error) {
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	fmt.Fprintf(os.Stderr, "\n%s\n\n%s\n",
+		dimStyle.Render(parsed.Path),
+		parsed.Prompt,
+	)
+
+	var confirm bool
+	err := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Run this thought?").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&confirm),
+		),
+	).Run()
+	if err != nil {
+		return false, fmt.Errorf("confirmation prompt: %w", err)
+	}
+	return confirm, nil
 }
 
 func createProvider(cfg *config.ResolvedConfig) (provider.Provider, error) {

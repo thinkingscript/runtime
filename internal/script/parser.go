@@ -2,8 +2,11 @@ package script
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/thinkingscript/cli/internal/config"
 	"gopkg.in/yaml.v3"
@@ -14,10 +17,19 @@ type ParsedScript struct {
 	Config      *config.ScriptConfig
 	Fingerprint string
 	Path        string
+	IsURL       bool
 }
 
 func Parse(path string) (*ParsedScript, error) {
-	data, err := os.ReadFile(path)
+	isURL := strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://")
+
+	var data []byte
+	var err error
+	if isURL {
+		data, err = fetchURL(path)
+	} else {
+		data, err = os.ReadFile(path)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("reading script %s: %w", path, err)
 	}
@@ -70,5 +82,30 @@ func Parse(path string) (*ParsedScript, error) {
 		Config:      scriptCfg,
 		Fingerprint: fingerprint,
 		Path:        path,
+		IsURL:       isURL,
 	}, nil
+}
+
+// maxScriptSize is the maximum size of a remotely-fetched thought file (1 MB).
+const maxScriptSize = 1 << 20
+
+func fetchURL(url string) ([]byte, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("fetching %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetching %s: HTTP %d", url, resp.StatusCode)
+	}
+	limited := io.LimitReader(resp.Body, maxScriptSize+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, fmt.Errorf("reading response from %s: %w", url, err)
+	}
+	if len(data) > maxScriptSize {
+		return nil, fmt.Errorf("script from %s exceeds maximum size (%d bytes)", url, maxScriptSize)
+	}
+	return data, nil
 }
