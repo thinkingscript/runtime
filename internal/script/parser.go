@@ -91,7 +91,13 @@ const maxScriptSize = 1 << 20
 
 func fetchURL(url string) ([]byte, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("building request for %s: %w", url, err)
+	}
+	req.Header.Set("Accept", "text/markdown, text/x-markdown;q=0.9, text/plain;q=0.8, */*;q=0.1")
+	req.Header.Set("User-Agent", "Think/1.0")
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetching %s: %w", url, err)
 	}
