@@ -243,19 +243,34 @@ func (a *Approver) ApproveEnvRead(varName string) (bool, error) {
 }
 
 var (
-	cmdStyle   = ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
-	labelStyle = ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
+	amber     = lipgloss.Color("214")
+	dimColor  = lipgloss.Color("242")
+
+	markerStyle = ui.Renderer.NewStyle().Foreground(amber).Bold(true)
+	opStyle     = ui.Renderer.NewStyle().Foreground(amber).Bold(true)
+	detailStyle = ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
+	hintStyle   = ui.Renderer.NewStyle().Foreground(dimColor)
 )
 
-// indentedTheme creates a huh theme indented to align with the tool name
-// after the "● " prefix (2 chars).
-func indentedTheme() *huh.Theme {
+func approvalTheme() *huh.Theme {
 	t := huh.ThemeBase()
-	t.Focused.Base = lipgloss.NewStyle().PaddingTop(1)
-	t.Focused.SelectSelector = lipgloss.NewStyle().SetString("❯ ")
-	t.Blurred.Base = lipgloss.NewStyle().PaddingTop(1)
+
+	t.Focused.Base = lipgloss.NewStyle().PaddingLeft(4)
+	t.Focused.SelectSelector = lipgloss.NewStyle().Foreground(amber).SetString("❯ ")
+	t.Focused.SelectedOption = lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
+	t.Focused.UnselectedOption = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+
+	t.Blurred.Base = lipgloss.NewStyle().PaddingLeft(4)
 	t.Blurred.SelectSelector = lipgloss.NewStyle().SetString("  ")
+	t.Blurred.SelectedOption = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	t.Blurred.UnselectedOption = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+
 	return t
+}
+
+func optionLabel(action, hint string) string {
+	padded := fmt.Sprintf("%-8s", action)
+	return padded + hintStyle.Render(hint)
 }
 
 // promptWithBatch returns DecisionAllow (persist), decisionOnce (one-time),
@@ -267,23 +282,24 @@ func (a *Approver) promptWithBatch(label, detail string) (Decision, error) {
 	}
 	defer releasePromptLock(lock)
 
-	fmt.Fprintf(os.Stderr, "\n  %s %s\n",
-		labelStyle.Render(label),
-		cmdStyle.Render(truncate(detail, 200)))
+	fmt.Fprintf(os.Stderr, "\n  %s %s  %s\n",
+		markerStyle.Render("◆"),
+		opStyle.Render(strings.ToUpper(label)),
+		detailStyle.Render(truncate(detail, 200)))
 
 	var choice string
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Options(
-					huh.NewOption("Yes", "yes"),
-					huh.NewOption("Allow all", "allow_all"),
-					huh.NewOption("Always", "always"),
-					huh.NewOption("No", "no"),
+					huh.NewOption(optionLabel("Once", "allow this time"), "yes"),
+					huh.NewOption(optionLabel("Session", "allow all this run"), "allow_all"),
+					huh.NewOption(optionLabel("Always", "save to policy"), "always"),
+					huh.NewOption(optionLabel("Deny", "reject"), "no"),
 				).
 				Value(&choice),
 		),
-	).WithTheme(indentedTheme()).WithOutput(os.Stderr)
+	).WithTheme(approvalTheme()).WithOutput(os.Stderr)
 
 	if a.ttyInput != nil {
 		form = form.WithInput(a.ttyInput)

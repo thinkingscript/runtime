@@ -191,12 +191,21 @@ The LLM's text responses go to stderr (debug). Only `write_stdout` produces actu
 
 ## Approval System
 
-When the LLM wants to run a command or read an env var, agent-exec prompts you for approval:
+When the LLM wants to access something sensitive (network, env vars, files outside the workspace), a prompt appears:
 
-- **Interactive TTY**: Styled confirmation prompt with Yes / No / Always options
-- **Non-interactive**: Denied by default (safe for CI/pipes)
+```
+  ◆ NET  network access
+      ❯ Once     allow this time
+        Session  allow all this run
+        Always   save to policy
+        Deny     reject
+```
 
-Choosing "Always" persists the approval in the script's cache directory. Approvals are automatically invalidated when the script content changes.
+- **Once**: allow this specific action, this run only
+- **Session**: allow all actions of this type for the rest of this run
+- **Always**: persist the decision to the thought's `policy.yaml`
+- **Deny**: reject the action; the LLM adapts and tries another approach
+- **Non-interactive**: all sensitive actions are denied by default (safe for CI/pipes)
 
 ## Piping
 
