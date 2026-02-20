@@ -340,3 +340,25 @@ thought build weather.thought -o weather
 # Install to ~/.thinkingscript/bin/
 thought install weather.thought
 ```
+
+## Managing Installed Thoughts
+
+```bash
+# List all installed thoughts
+thought ls
+
+# Show details about a thought
+thought info weather
+
+# Run an installed thought
+thought run weather "San Francisco"
+
+# Get the path to a thought binary (for scripting)
+thought path weather
+
+# Remove a thought (keeps data)
+thought rm weather
+
+# Remove a thought and its data
+thought rm --force weather
+```

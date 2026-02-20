@@ -22,9 +22,12 @@ func execute(ctx context.Context) {
 func init() {
 	rootCmd.AddCommand(cacheCmd)
 	rootCmd.AddCommand(buildCmd)
+	rootCmd.AddCommand(infoCmd)
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(lsCmd)
+	rootCmd.AddCommand(pathCmd)
 	rootCmd.AddCommand(rmCmd)
+	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(memoryCmd)
 	rootCmd.AddCommand(workspaceCmd)
 	rootCmd.AddCommand(setupCmd)
