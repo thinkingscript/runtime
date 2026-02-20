@@ -28,6 +28,7 @@ func init() {
 	rootCmd.AddCommand(pathCmd)
 	rootCmd.AddCommand(rmCmd)
 	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(catCmd)
 	rootCmd.AddCommand(memoryCmd)
 	rootCmd.AddCommand(workspaceCmd)
 	rootCmd.AddCommand(setupCmd)
