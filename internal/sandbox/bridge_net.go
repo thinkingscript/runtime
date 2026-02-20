@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -26,21 +27,28 @@ func (s *Sandbox) registerNet(vm *goja.Runtime) {
 	net := vm.NewObject()
 
 	net.Set("fetch", func(call goja.FunctionCall) goja.Value {
+		urlStr := call.Argument(0).String()
+
+		// Extract host from URL for approval
+		parsedURL, err := url.Parse(urlStr)
+		if err != nil {
+			throwError(vm, fmt.Sprintf("net.fetch: invalid URL: %s", err.Error()))
+		}
+		host := parsedURL.Hostname()
+
 		// Check network access approval
 		if s.cfg.ApproveNet != nil {
-			allowed, err := s.cfg.ApproveNet()
+			allowed, err := s.cfg.ApproveNet(host)
 			if err != nil {
 				s.checkInterrupted(err)
 				throwError(vm, fmt.Sprintf("net.fetch: %s", err.Error()))
 			}
 			if !allowed {
-				throwError(vm, "net.fetch: network access denied")
+				throwError(vm, fmt.Sprintf("net.fetch: access to %s denied", host))
 			}
 		} else {
 			throwError(vm, "net.fetch: network access denied (no approval handler)")
 		}
-
-		url := call.Argument(0).String()
 
 		// Parse options (method, headers, body)
 		method := "GET"
@@ -65,7 +73,7 @@ func (s *Sandbox) registerNet(vm *goja.Runtime) {
 			}
 		}
 
-		req, err := http.NewRequestWithContext(s.ctx, method, url, body)
+		req, err := http.NewRequestWithContext(s.ctx, method, urlStr, body)
 		if err != nil {
 			throwError(vm, fmt.Sprintf("net.fetch: invalid request: %s", err.Error()))
 		}
@@ -75,16 +83,16 @@ func (s *Sandbox) registerNet(vm *goja.Runtime) {
 
 		resp, err := httpClient.Do(req)
 		if err != nil {
-			throwError(vm, fmt.Sprintf("net.fetch: request to %s failed: %s", url, err.Error()))
+			throwError(vm, fmt.Sprintf("net.fetch: request to %s failed: %s", urlStr, err.Error()))
 		}
 		defer resp.Body.Close()
 
 		respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody+1))
 		if err != nil {
-			throwError(vm, fmt.Sprintf("net.fetch: error reading response from %s", url))
+			throwError(vm, fmt.Sprintf("net.fetch: error reading response from %s", urlStr))
 		}
 		if int64(len(respBody)) > maxResponseBody {
-			throwError(vm, fmt.Sprintf("net.fetch: response body from %s exceeds %dMB limit", url, maxResponseBody/1024/1024))
+			throwError(vm, fmt.Sprintf("net.fetch: response body from %s exceeds %dMB limit", urlStr, maxResponseBody/1024/1024))
 		}
 
 		// Convert response headers to a plain object

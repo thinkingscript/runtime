@@ -25,7 +25,7 @@ type Config struct {
 	Timeout       time.Duration // Max execution time (default 30s)
 	ApprovePath   func(op, path string) (bool, error) // Called for paths outside AllowedPaths/WritablePaths; nil = deny all
 	ApproveEnv    func(name string) (bool, error) // Called before reading env vars; nil = allow all
-	ApproveNet    func() (bool, error)           // Called before network access; nil = deny all
+	ApproveNet    func(host string) (bool, error) // Called before network access; nil = deny all
 	OnWrite       func(path, content string)      // Called after successful file writes; nil = no-op
 }
 
