@@ -11,41 +11,37 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/thinkingscript/cli/internal/ui"
 	"golang.org/x/term"
-	"gopkg.in/yaml.v3"
 )
 
 // ErrInterrupted is returned when the user presses Ctrl+C during a prompt.
 var ErrInterrupted = errors.New("interrupted")
 
-type Decision string
+// promptDecision represents the user's choice from a prompt.
+type promptDecision string
 
 const (
-	DecisionAllow Decision = "allow"
-	DecisionDeny  Decision = "deny"
-
-	decisionOnce    Decision = "once"    // one-time allow, not persisted
-	decisionSession Decision = "session" // session-scoped, not persisted
+	promptOnce    promptDecision = "once"    // one-time allow, not persisted
+	promptSession promptDecision = "session" // session-scoped, not persisted
+	promptAlways  promptDecision = "always"  // persist to policy
+	promptDeny    promptDecision = "deny"    // deny (persisted if "always deny")
 )
 
-// Policy represents the YAML policy file format.
-type Policy struct {
-	Net   Decision            `yaml:"net,omitempty"`
-	Env   map[string]Decision `yaml:"env,omitempty"`
-	Paths map[string]Decision `yaml:"paths,omitempty"`
-}
-
+// Approver handles permission checks against policies.
 type Approver struct {
 	thoughtDir       string
 	globalPolicyPath string
-	thoughtPolicy    *Policy // read-write, saved to thoughtDir/policy.yaml
+	thoughtPolicy    *Policy // read-write, saved to thoughtDir/policy.json
 	globalPolicy     *Policy // read-only
 	isTTY            bool
 	ttyInput         *os.File
-	sessionAllowEnv  bool // "Allow all env reads" for this session
-	sessionAllowFS   bool // "Allow all path access" for this session
-	sessionAllowNet  bool // "Allow all net access" for this session
+
+	// Session-scoped allows (not persisted)
+	sessionAllowEnv  bool
+	sessionAllowFS   bool
+	sessionAllowNet  bool
 }
 
+// NewApprover creates an Approver that checks policies and prompts for approval.
 func NewApprover(thoughtDir, globalPolicyPath string) *Approver {
 	isTTY := term.IsTerminal(int(os.Stderr.Fd()))
 
@@ -64,8 +60,8 @@ func NewApprover(thoughtDir, globalPolicyPath string) *Approver {
 		globalPolicyPath: globalPolicyPath,
 		isTTY:            isTTY,
 		ttyInput:         ttyInput,
-		thoughtPolicy:    &Policy{},
-		globalPolicy:     &Policy{},
+		thoughtPolicy:    NewPolicy(),
+		globalPolicy:     NewPolicy(),
 	}
 	a.loadPolicies()
 	return a
@@ -79,24 +75,44 @@ func (a *Approver) Close() {
 	}
 }
 
-func (a *Approver) ApproveNet() (bool, error) {
+// ApproveNet checks if network access to a specific host is allowed.
+func (a *Approver) ApproveNet(host string) (bool, error) {
 	if a.sessionAllowNet {
 		return true, nil
 	}
 
 	// Check thought policy
-	if a.thoughtPolicy.Net == DecisionAllow {
-		return true, nil
-	}
-	if a.thoughtPolicy.Net == DecisionDeny {
-		return false, nil
+	if entry := a.thoughtPolicy.Net.Hosts.MatchHost(host); entry != nil {
+		if entry.Approval == ApprovalAllow {
+			return true, nil
+		}
+		if entry.Approval == ApprovalDeny {
+			return false, nil
+		}
+		// ApprovalPrompt falls through to prompt
 	}
 
 	// Check global policy
-	if a.globalPolicy.Net == DecisionAllow {
+	if entry := a.globalPolicy.Net.Hosts.MatchHost(host); entry != nil {
+		if entry.Approval == ApprovalAllow {
+			return true, nil
+		}
+		if entry.Approval == ApprovalDeny {
+			return false, nil
+		}
+	}
+
+	// Check defaults
+	if a.thoughtPolicy.Net.Hosts.Default == ApprovalAllow {
 		return true, nil
 	}
-	if a.globalPolicy.Net == DecisionDeny {
+	if a.thoughtPolicy.Net.Hosts.Default == ApprovalDeny {
+		return false, nil
+	}
+	if a.globalPolicy.Net.Hosts.Default == ApprovalAllow {
+		return true, nil
+	}
+	if a.globalPolicy.Net.Hosts.Default == ApprovalDeny {
 		return false, nil
 	}
 
@@ -104,42 +120,89 @@ func (a *Approver) ApproveNet() (bool, error) {
 		return false, nil
 	}
 
-	decision, err := a.promptWithBatch("net", "network access")
+	decision, err := a.prompt("net", host)
 	if err != nil {
 		return false, err
 	}
 
 	switch decision {
-	case DecisionAllow:
-		a.thoughtPolicy.Net = DecisionAllow
+	case promptAlways:
+		a.thoughtPolicy.AddHostEntry(host, ApprovalAllow, SourcePrompt)
 		a.saveThoughtPolicy()
-	case DecisionDeny:
-		a.thoughtPolicy.Net = DecisionDeny
+	case promptDeny:
+		a.thoughtPolicy.AddHostEntry(host, ApprovalDeny, SourcePrompt)
 		a.saveThoughtPolicy()
-	case decisionSession:
+	case promptSession:
 		a.sessionAllowNet = true
 	}
 
-	return decision == DecisionAllow || decision == decisionOnce || decision == decisionSession, nil
+	return decision == promptAlways || decision == promptOnce || decision == promptSession, nil
 }
 
+// ApprovePath checks if a filesystem operation on a path is allowed.
+// The op parameter is one of "read", "write", "delete".
 func (a *Approver) ApprovePath(op, path string) (bool, error) {
+	// SECURITY: Never allow modifying the thought's own policy file
+	if a.thoughtDir != "" {
+		policyPath := filepath.Join(a.thoughtDir, "policy.json")
+		if path == policyPath || strings.HasPrefix(path, policyPath) {
+			return false, nil
+		}
+	}
+
+	modeChar := opToModeChar(op)
+
+	// Check global protected entries FIRST - these cannot be overridden
+	for _, entry := range a.globalPolicy.Paths.Protected {
+		if pathMatches(entry.Path, path) && hasMode(entry.Mode, modeChar) {
+			if entry.Approval == ApprovalDeny {
+				return false, nil // Protected deny cannot be overridden
+			}
+			if entry.Approval == ApprovalAllow {
+				return true, nil
+			}
+		}
+	}
+
 	if a.sessionAllowFS {
 		return true, nil
 	}
 
-	// Check if this path (or any parent) is already approved in thought policy.
-	if a.pathApproved(a.thoughtPolicy, path) {
-		return true, nil
+	// Check thought policy
+	if entry := a.thoughtPolicy.Paths.MatchPath(path); entry != nil {
+		if hasMode(entry.Mode, modeChar) {
+			if entry.Approval == ApprovalAllow {
+				return true, nil
+			}
+			if entry.Approval == ApprovalDeny {
+				return false, nil
+			}
+		}
 	}
 
-	// Check global policy.
-	if a.pathApproved(a.globalPolicy, path) {
-		return true, nil
+	// Check regular global policy entries
+	if entry := a.globalPolicy.Paths.MatchPath(path); entry != nil {
+		if hasMode(entry.Mode, modeChar) {
+			if entry.Approval == ApprovalAllow {
+				return true, nil
+			}
+			if entry.Approval == ApprovalDeny {
+				return false, nil
+			}
+		}
 	}
 
-	// Check if explicitly denied in thought policy.
-	if a.pathDenied(a.thoughtPolicy, path) {
+	// Check defaults
+	if a.thoughtPolicy.Paths.Default == ApprovalAllow {
+		return true, nil
+	}
+	if a.thoughtPolicy.Paths.Default == ApprovalDeny {
+		return false, nil
+	}
+	if a.globalPolicy.Paths.Default == ApprovalAllow {
+		return true, nil
+	}
+	if a.globalPolicy.Paths.Default == ApprovalDeny {
 		return false, nil
 	}
 
@@ -147,101 +210,109 @@ func (a *Approver) ApprovePath(op, path string) (bool, error) {
 		return false, nil
 	}
 
-	decision, err := a.promptWithBatch(op, path)
+	decision, err := a.prompt(op, path)
 	if err != nil {
 		return false, err
 	}
 
 	switch decision {
-	case DecisionAllow:
-		if a.thoughtPolicy.Paths == nil {
-			a.thoughtPolicy.Paths = make(map[string]Decision)
-		}
-		a.thoughtPolicy.Paths[path] = DecisionAllow
+	case promptAlways:
+		// When approving, grant the specific mode requested
+		a.thoughtPolicy.AddPathEntry(path, modeChar, ApprovalAllow, SourcePrompt)
 		a.saveThoughtPolicy()
-	case DecisionDeny:
-		if a.thoughtPolicy.Paths == nil {
-			a.thoughtPolicy.Paths = make(map[string]Decision)
-		}
-		a.thoughtPolicy.Paths[path] = DecisionDeny
+	case promptDeny:
+		a.thoughtPolicy.AddPathEntry(path, modeChar, ApprovalDeny, SourcePrompt)
 		a.saveThoughtPolicy()
-	case decisionSession:
+	case promptSession:
 		a.sessionAllowFS = true
 	}
 
-	return decision == DecisionAllow || decision == decisionOnce || decision == decisionSession, nil
+	return decision == promptAlways || decision == promptOnce || decision == promptSession, nil
 }
 
-// pathApproved checks if the given path or any of its parent directories
-// has been approved. This means approving /Users/brad covers /Users/brad/foo.jpg.
-func (a *Approver) pathApproved(policy *Policy, path string) bool {
-	for approved, d := range policy.Paths {
-		if d != DecisionAllow {
-			continue
-		}
-		if path == approved || strings.HasPrefix(path, approved+string(filepath.Separator)) {
-			return true
-		}
-	}
-	return false
-}
-
-func (a *Approver) pathDenied(policy *Policy, path string) bool {
-	for denied, d := range policy.Paths {
-		if d != DecisionDeny {
-			continue
-		}
-		if path == denied || strings.HasPrefix(path, denied+string(filepath.Separator)) {
-			return true
-		}
-	}
-	return false
-}
-
+// ApproveEnvRead checks if reading an environment variable is allowed.
 func (a *Approver) ApproveEnvRead(varName string) (bool, error) {
 	if a.sessionAllowEnv {
 		return true, nil
 	}
 
 	// Check thought policy
-	if d, ok := a.thoughtPolicy.Env[varName]; ok {
-		return d == DecisionAllow, nil
+	if entry := a.thoughtPolicy.Env.MatchEnv(varName); entry != nil {
+		if entry.Approval == ApprovalAllow {
+			return true, nil
+		}
+		if entry.Approval == ApprovalDeny {
+			return false, nil
+		}
 	}
 
 	// Check global policy
-	if d, ok := a.globalPolicy.Env[varName]; ok {
-		return d == DecisionAllow, nil
+	if entry := a.globalPolicy.Env.MatchEnv(varName); entry != nil {
+		if entry.Approval == ApprovalAllow {
+			return true, nil
+		}
+		if entry.Approval == ApprovalDeny {
+			return false, nil
+		}
+	}
+
+	// Check defaults
+	if a.thoughtPolicy.Env.Default == ApprovalAllow {
+		return true, nil
+	}
+	if a.thoughtPolicy.Env.Default == ApprovalDeny {
+		return false, nil
+	}
+	if a.globalPolicy.Env.Default == ApprovalAllow {
+		return true, nil
+	}
+	if a.globalPolicy.Env.Default == ApprovalDeny {
+		return false, nil
 	}
 
 	if !a.isTTY {
 		return false, nil
 	}
 
-	decision, err := a.promptWithBatch("env", varName)
+	decision, err := a.prompt("env", varName)
 	if err != nil {
 		return false, err
 	}
 
 	switch decision {
-	case DecisionAllow:
-		if a.thoughtPolicy.Env == nil {
-			a.thoughtPolicy.Env = make(map[string]Decision)
-		}
-		a.thoughtPolicy.Env[varName] = DecisionAllow
+	case promptAlways:
+		a.thoughtPolicy.AddEnvEntry(varName, ApprovalAllow, SourcePrompt)
 		a.saveThoughtPolicy()
-	case DecisionDeny:
-		if a.thoughtPolicy.Env == nil {
-			a.thoughtPolicy.Env = make(map[string]Decision)
-		}
-		a.thoughtPolicy.Env[varName] = DecisionDeny
+	case promptDeny:
+		a.thoughtPolicy.AddEnvEntry(varName, ApprovalDeny, SourcePrompt)
 		a.saveThoughtPolicy()
-	case decisionSession:
+	case promptSession:
 		a.sessionAllowEnv = true
 	}
 
-	return decision == DecisionAllow || decision == decisionOnce || decision == decisionSession, nil
+	return decision == promptAlways || decision == promptOnce || decision == promptSession, nil
 }
 
+// opToModeChar converts an operation name to a mode character.
+func opToModeChar(op string) string {
+	switch op {
+	case "read", "list":
+		return "r"
+	case "write":
+		return "w"
+	case "delete":
+		return "d"
+	default:
+		return "r"
+	}
+}
+
+// hasMode checks if mode string contains the given mode character.
+func hasMode(mode, char string) bool {
+	return strings.Contains(mode, char)
+}
+
+// Prompt styles
 var (
 	amber     = lipgloss.Color("214")
 	dimColor  = lipgloss.Color("242")
@@ -273,12 +344,11 @@ func optionLabel(action, hint string) string {
 	return padded + hintStyle.Render(hint)
 }
 
-// promptWithBatch returns DecisionAllow (persist), decisionOnce (one-time),
-// decisionSession (session-scoped), or DecisionDeny.
-func (a *Approver) promptWithBatch(label, detail string) (Decision, error) {
+// prompt shows an approval dialog and returns the user's decision.
+func (a *Approver) prompt(label, detail string) (promptDecision, error) {
 	lock, err := acquirePromptLock()
 	if err != nil {
-		return DecisionDeny, fmt.Errorf("acquiring prompt lock: %w", err)
+		return promptDeny, fmt.Errorf("acquiring prompt lock: %w", err)
 	}
 	defer releasePromptLock(lock)
 
@@ -292,10 +362,10 @@ func (a *Approver) promptWithBatch(label, detail string) (Decision, error) {
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Options(
-					huh.NewOption(optionLabel("Once", "allow this time"), "yes"),
-					huh.NewOption(optionLabel("Session", "allow all this run"), "allow_all"),
+					huh.NewOption(optionLabel("Once", "allow this time"), "once"),
+					huh.NewOption(optionLabel("Session", "allow all this run"), "session"),
 					huh.NewOption(optionLabel("Always", "save to policy"), "always"),
-					huh.NewOption(optionLabel("Deny", "reject"), "no"),
+					huh.NewOption(optionLabel("Deny", "reject"), "deny"),
 				).
 				Value(&choice),
 		),
@@ -310,49 +380,35 @@ func (a *Approver) promptWithBatch(label, detail string) (Decision, error) {
 	}
 
 	switch choice {
-	case "yes":
-		return decisionOnce, nil
-	case "allow_all":
-		return decisionSession, nil
+	case "once":
+		return promptOnce, nil
+	case "session":
+		return promptSession, nil
 	case "always":
-		return DecisionAllow, nil
+		return promptAlways, nil
 	default:
-		return DecisionDeny, nil
+		return promptDeny, nil
 	}
 }
 
 func (a *Approver) loadPolicies() {
 	// Load global policy (read-only)
 	if a.globalPolicyPath != "" {
-		if data, err := os.ReadFile(a.globalPolicyPath); err == nil {
-			if err := yaml.Unmarshal(data, a.globalPolicy); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: corrupted global policy file, ignoring: %v\n", err)
-			}
+		if policy, err := LoadPolicy(a.globalPolicyPath); err == nil {
+			a.globalPolicy = policy
+		} else if !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "warning: corrupted global policy file, ignoring: %v\n", err)
 		}
 	}
 
 	// Load thought policy (read-write)
 	if a.thoughtDir != "" {
-		path := filepath.Join(a.thoughtDir, "policy.yaml")
-		if data, err := os.ReadFile(path); err == nil {
-			if err := yaml.Unmarshal(data, a.thoughtPolicy); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: corrupted thought policy file, re-prompting: %v\n", err)
-			}
+		path := filepath.Join(a.thoughtDir, "policy.json")
+		if policy, err := LoadPolicy(path); err == nil {
+			a.thoughtPolicy = policy
+		} else if !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "warning: corrupted thought policy file, re-prompting: %v\n", err)
 		}
-	}
-
-	// Ensure maps are initialized
-	if a.thoughtPolicy.Env == nil {
-		a.thoughtPolicy.Env = make(map[string]Decision)
-	}
-	if a.thoughtPolicy.Paths == nil {
-		a.thoughtPolicy.Paths = make(map[string]Decision)
-	}
-	if a.globalPolicy.Env == nil {
-		a.globalPolicy.Env = make(map[string]Decision)
-	}
-	if a.globalPolicy.Paths == nil {
-		a.globalPolicy.Paths = make(map[string]Decision)
 	}
 }
 
@@ -361,17 +417,8 @@ func (a *Approver) saveThoughtPolicy() {
 		return
 	}
 
-	if err := os.MkdirAll(a.thoughtDir, 0700); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to create thought dir: %v\n", err)
-		return
-	}
-
-	data, err := yaml.Marshal(a.thoughtPolicy)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to marshal policy: %v\n", err)
-		return
-	}
-	if err := os.WriteFile(filepath.Join(a.thoughtDir, "policy.yaml"), data, 0600); err != nil {
+	path := filepath.Join(a.thoughtDir, "policy.json")
+	if err := a.thoughtPolicy.Save(path); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to save policy: %v\n", err)
 	}
 }
@@ -382,4 +429,30 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-3] + "..."
+}
+
+// BootstrapDefaults adds default policy entries for workspace and memories.
+// These are auto-approved paths that the thought can always access.
+func (a *Approver) BootstrapDefaults(workspaceDir, memoriesDir, workDir string) {
+	// Only bootstrap if no entries exist yet
+	if len(a.thoughtPolicy.Paths.Entries) > 0 {
+		return
+	}
+
+	// Workspace: full read/write/delete
+	if workspaceDir != "" {
+		a.thoughtPolicy.AddPathEntry(workspaceDir, "rwd", ApprovalAllow, SourceDefault)
+	}
+
+	// Memories: full read/write/delete
+	if memoriesDir != "" {
+		a.thoughtPolicy.AddPathEntry(memoriesDir, "rwd", ApprovalAllow, SourceDefault)
+	}
+
+	// CWD: read-only by default
+	if workDir != "" {
+		a.thoughtPolicy.AddPathEntry(workDir, "r", ApprovalAllow, SourceDefault)
+	}
+
+	a.saveThoughtPolicy()
 }
