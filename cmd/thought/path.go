@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/thinkingscript/cli/internal/config"
 )
 
 var pathCmd = &cobra.Command{
@@ -19,14 +16,15 @@ var pathCmd = &cobra.Command{
 }
 
 func runPath(cmd *cobra.Command, args []string) error {
-	name := args[0]
-
-	binPath := filepath.Join(config.BinDir(), name)
-
-	if info, err := os.Stat(binPath); err != nil || info.IsDir() {
-		return fmt.Errorf("thought '%s' not found", name)
+	resolved, err := ResolveThought(args[0], "path")
+	if err != nil {
+		return err
 	}
 
-	fmt.Println(binPath)
+	if resolved.Target == TargetFile {
+		return fmt.Errorf("'%s' is a file, not an installed thought.", args[0])
+	}
+
+	fmt.Println(resolved.Path)
 	return nil
 }

@@ -21,33 +21,28 @@ var infoCmd = &cobra.Command{
 }
 
 func runInfo(cmd *cobra.Command, args []string) error {
-	name := args[0]
+	resolved, err := ResolveThought(args[0], "info")
+	if err != nil {
+		return err
+	}
 
-	binPath := filepath.Join(config.BinDir(), name)
+	if resolved.Target == TargetFile {
+		return fmt.Errorf("'%s' is a file, not an installed thought.\nUse 'cat %s' to view the file.", args[0], args[0])
+	}
+
+	name := resolved.Name
+	binPath := resolved.Path
 	thoughtDir := filepath.Join(config.HomeDir(), "thoughts", name)
-
-	binExists := false
-	if info, err := os.Stat(binPath); err == nil && !info.IsDir() {
-		binExists = true
-	}
-
-	dataExists := false
-	if _, err := os.Stat(thoughtDir); err == nil {
-		dataExists = true
-	}
-
-	if !binExists && !dataExists {
-		return fmt.Errorf("thought '%s' not found", name)
-	}
 
 	fmt.Printf("Name: %s\n", name)
 
 	// Binary info
-	if binExists {
-		info, _ := os.Stat(binPath)
-		fmt.Printf("Binary: %s (%d bytes)\n", binPath, info.Size())
-	} else {
-		fmt.Printf("Binary: (not installed)\n")
+	info, _ := os.Stat(binPath)
+	fmt.Printf("Binary: %s (%d bytes)\n", binPath, info.Size())
+
+	dataExists := false
+	if _, err := os.Stat(thoughtDir); err == nil {
+		dataExists = true
 	}
 
 	if !dataExists {

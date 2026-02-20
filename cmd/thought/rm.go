@@ -15,7 +15,7 @@ var rmCmd = &cobra.Command{
 	Use:          "rm <name>",
 	Aliases:      []string{"remove"},
 	Short:        "Remove an installed thought",
-	Long:         "Remove a thought's binary from ~/.thinkingscript/bin/ and optionally its data (workspace, memories, policy).",
+	Long:         "Remove a thought's binary from ~/.thinkingscript/bin/ and optionally its data (workspace, memories, policy).\n\nUse the thought name (not a file path). For files, use 'rm' directly.",
 	Args:         cobra.ExactArgs(1),
 	RunE:         runRm,
 	SilenceUsage: true,
@@ -26,41 +26,33 @@ func init() {
 }
 
 func runRm(cmd *cobra.Command, args []string) error {
-	name := args[0]
+	resolved, err := ResolveThought(args[0], "rm")
+	if err != nil {
+		return err
+	}
 
-	binPath := filepath.Join(config.BinDir(), name)
+	if resolved.Target == TargetFile {
+		return fmt.Errorf("'%s' is a file, not an installed thought.\nTo remove the file: rm %s", args[0], args[0])
+	}
+
+	name := resolved.Name
+	binPath := resolved.Path
 	thoughtDir := filepath.Join(config.HomeDir(), "thoughts", name)
 
-	binExists := false
-	if _, err := os.Stat(binPath); err == nil {
-		binExists = true
+	// Remove binary (resolver already verified it exists)
+	if err := os.Remove(binPath); err != nil {
+		return fmt.Errorf("removing binary: %w", err)
 	}
-
-	dataExists := false
-	if _, err := os.Stat(thoughtDir); err == nil {
-		dataExists = true
-	}
-
-	if !binExists && !dataExists {
-		return fmt.Errorf("thought '%s' not found", name)
-	}
-
-	// Remove binary
-	if binExists {
-		if err := os.Remove(binPath); err != nil {
-			return fmt.Errorf("removing binary: %w", err)
-		}
-		fmt.Fprintf(os.Stderr, "Removed %s\n", binPath)
-	}
+	fmt.Fprintf(os.Stderr, "Removed %s\n", binPath)
 
 	// Remove data if --force
-	if dataExists {
+	if _, err := os.Stat(thoughtDir); err == nil {
 		if rmForceFlag {
 			if err := os.RemoveAll(thoughtDir); err != nil {
 				return fmt.Errorf("removing thought data: %w", err)
 			}
 			fmt.Fprintf(os.Stderr, "Removed %s\n", thoughtDir)
-		} else if binExists {
+		} else {
 			fmt.Fprintf(os.Stderr, "Note: thought data remains at %s (use --force to remove)\n", thoughtDir)
 		}
 	}

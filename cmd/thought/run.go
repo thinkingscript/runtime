@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/thinkingscript/cli/internal/config"
 )
 
 var runCmd = &cobra.Command{
@@ -20,14 +18,17 @@ var runCmd = &cobra.Command{
 }
 
 func runRun(cmd *cobra.Command, args []string) error {
-	name := args[0]
-	thoughtArgs := args[1:]
-
-	binPath := filepath.Join(config.BinDir(), name)
-
-	if info, err := os.Stat(binPath); err != nil || info.IsDir() {
-		return fmt.Errorf("thought '%s' not found in %s", name, config.BinDir())
+	resolved, err := ResolveThought(args[0], "run")
+	if err != nil {
+		return err
 	}
+
+	if resolved.Target == TargetFile {
+		return fmt.Errorf("'%s' is a file, not an installed thought.\nUse 'think %s' to run the script.", args[0], args[0])
+	}
+
+	thoughtArgs := args[1:]
+	binPath := resolved.Path
 
 	// Execute the thought binary
 	thoughtCmd := exec.Command(binPath, thoughtArgs...)
