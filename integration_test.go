@@ -46,13 +46,11 @@ func TestBootFlowMemoryJSSuccess(t *testing.T) {
 
 	// Create thought directory structure
 	thoughtDir := filepath.Join(tmpHome, "thoughts", "test")
-	libDir := filepath.Join(thoughtDir, "lib")
-	tmpDir := filepath.Join(thoughtDir, "tmp")
+	workspaceDir := filepath.Join(thoughtDir, "workspace")
 	memoriesDir := filepath.Join(thoughtDir, "memories")
 	memoryJSPath := filepath.Join(thoughtDir, "memory.js")
 
-	os.MkdirAll(libDir, 0700)
-	os.MkdirAll(tmpDir, 0700)
+	os.MkdirAll(workspaceDir, 0700)
 	os.MkdirAll(memoriesDir, 0700)
 
 	// Create a memory.js that succeeds
@@ -68,8 +66,7 @@ func TestBootFlowMemoryJSSuccess(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      thoughtDir,
 		ThoughtDir:   thoughtDir,
-		LibDir:       libDir,
-		TmpDir:       tmpDir,
+		WorkspaceDir: workspaceDir,
 		MemoriesDir:  memoriesDir,
 	})
 
@@ -86,13 +83,11 @@ func TestBootFlowAgentResume(t *testing.T) {
 	t.Setenv("THINKINGSCRIPT_HOME", tmpHome)
 
 	thoughtDir := filepath.Join(tmpHome, "thoughts", "test")
-	libDir := filepath.Join(thoughtDir, "lib")
-	tmpDir := filepath.Join(thoughtDir, "tmp")
+	workspaceDir := filepath.Join(thoughtDir, "workspace")
 	memoriesDir := filepath.Join(thoughtDir, "memories")
 	memoryJSPath := filepath.Join(thoughtDir, "memory.js")
 
-	os.MkdirAll(libDir, 0700)
-	os.MkdirAll(tmpDir, 0700)
+	os.MkdirAll(workspaceDir, 0700)
 	os.MkdirAll(memoriesDir, 0700)
 
 	// Create a memory.js that calls agent.resume()
@@ -111,8 +106,7 @@ func TestBootFlowAgentResume(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      thoughtDir,
 		ThoughtDir:   thoughtDir,
-		LibDir:       libDir,
-		TmpDir:       tmpDir,
+		WorkspaceDir: workspaceDir,
 		MemoriesDir:  memoriesDir,
 		Args:         []string{},
 	})
@@ -129,8 +123,7 @@ func TestBootFlowAgentResume(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      thoughtDir,
 		ThoughtDir:   thoughtDir,
-		LibDir:       libDir,
-		TmpDir:       tmpDir,
+		WorkspaceDir: workspaceDir,
 		MemoriesDir:  memoriesDir,
 		Args:         []string{"NYC"},
 	})
@@ -145,13 +138,11 @@ func TestBootFlowMemoryJSError(t *testing.T) {
 	t.Setenv("THINKINGSCRIPT_HOME", tmpHome)
 
 	thoughtDir := filepath.Join(tmpHome, "thoughts", "test")
-	libDir := filepath.Join(thoughtDir, "lib")
-	tmpDir := filepath.Join(thoughtDir, "tmp")
+	workspaceDir := filepath.Join(thoughtDir, "workspace")
 	memoriesDir := filepath.Join(thoughtDir, "memories")
 	memoryJSPath := filepath.Join(thoughtDir, "memory.js")
 
-	os.MkdirAll(libDir, 0700)
-	os.MkdirAll(tmpDir, 0700)
+	os.MkdirAll(workspaceDir, 0700)
 	os.MkdirAll(memoriesDir, 0700)
 
 	// Create a memory.js that has an error
@@ -164,8 +155,7 @@ func TestBootFlowMemoryJSError(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      thoughtDir,
 		ThoughtDir:   thoughtDir,
-		LibDir:       libDir,
-		TmpDir:       tmpDir,
+		WorkspaceDir: workspaceDir,
 		MemoriesDir:  memoriesDir,
 	})
 
@@ -186,17 +176,17 @@ func TestSandboxWithRealFileSystem(t *testing.T) {
 	t.Setenv("THINKINGSCRIPT_HOME", tmpHome)
 
 	workDir := filepath.Join(tmpHome, "work")
-	libDir := filepath.Join(tmpHome, "lib")
+	workspaceDir := filepath.Join(tmpHome, "workspace")
 	os.MkdirAll(workDir, 0700)
-	os.MkdirAll(libDir, 0700)
+	os.MkdirAll(workspaceDir, 0700)
 
 	// Create a test file
 	testFile := filepath.Join(workDir, "data.txt")
 	os.WriteFile(testFile, []byte("test data"), 0644)
 
 	sb, err := sandbox.New(sandbox.Config{
-		AllowedPaths:  []string{workDir, libDir},
-		WritablePaths: []string{libDir},
+		AllowedPaths:  []string{workDir, workspaceDir},
+		WritablePaths: []string{workspaceDir},
 		WorkDir:       workDir,
 	})
 	if err != nil {
@@ -212,36 +202,34 @@ func TestSandboxWithRealFileSystem(t *testing.T) {
 		t.Errorf("result = %q, want %q", result, "test data")
 	}
 
-	// Test writing to lib
-	libFile := filepath.Join(libDir, "output.txt")
-	_, err = sb.Run(context.Background(), `fs.writeFile("`+libFile+`", "output data")`)
+	// Test writing to workspace
+	wsFile := filepath.Join(workspaceDir, "output.txt")
+	_, err = sb.Run(context.Background(), `fs.writeFile("`+wsFile+`", "output data")`)
 	if err != nil {
 		t.Fatalf("write error: %v", err)
 	}
 
-	content, _ := os.ReadFile(libFile)
+	content, _ := os.ReadFile(wsFile)
 	if string(content) != "output data" {
 		t.Errorf("file content = %q, want %q", string(content), "output data")
 	}
 }
 
-func TestMemoryJSWithLibModule(t *testing.T) {
+func TestMemoryJSWithWorkspaceModule(t *testing.T) {
 	tmpHome := t.TempDir()
 	tmpHome, _ = filepath.EvalSymlinks(tmpHome)
 	t.Setenv("THINKINGSCRIPT_HOME", tmpHome)
 
 	thoughtDir := filepath.Join(tmpHome, "thoughts", "test")
-	libDir := filepath.Join(thoughtDir, "lib")
-	tmpDir := filepath.Join(thoughtDir, "tmp")
+	workspaceDir := filepath.Join(thoughtDir, "workspace")
 	memoriesDir := filepath.Join(thoughtDir, "memories")
 	memoryJSPath := filepath.Join(thoughtDir, "memory.js")
 
-	os.MkdirAll(libDir, 0700)
-	os.MkdirAll(tmpDir, 0700)
+	os.MkdirAll(workspaceDir, 0700)
 	os.MkdirAll(memoriesDir, 0700)
 
-	// Create a helper module in lib
-	helperPath := filepath.Join(libDir, "helper.js")
+	// Create a helper module in workspace
+	helperPath := filepath.Join(workspaceDir, "helper.js")
 	helper := `
 		module.exports = {
 			greet: function(name) {
@@ -262,8 +250,7 @@ func TestMemoryJSWithLibModule(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      thoughtDir,
 		ThoughtDir:   thoughtDir,
-		LibDir:       libDir,
-		TmpDir:       tmpDir,
+		WorkspaceDir: workspaceDir,
 		MemoriesDir:  memoriesDir,
 	})
 
@@ -283,16 +270,12 @@ func TestConfigPathsConsistency(t *testing.T) {
 
 	// All these paths should be under the same thought directory
 	thoughtDir := config.ThoughtDir(scriptPath)
-	libDir := config.LibDir(scriptPath)
-	tmpDir := config.TmpDir(scriptPath)
+	workspaceDir := config.WorkspaceDir(scriptPath)
 	memoriesDir := config.MemoriesDir(scriptPath)
 	memoryJSPath := config.MemoryJSPath(scriptPath)
 
-	if !strings.HasPrefix(libDir, thoughtDir) {
-		t.Errorf("libDir should be under thoughtDir")
-	}
-	if !strings.HasPrefix(tmpDir, thoughtDir) {
-		t.Errorf("tmpDir should be under thoughtDir")
+	if !strings.HasPrefix(workspaceDir, thoughtDir) {
+		t.Errorf("workspaceDir should be under thoughtDir")
 	}
 	if !strings.HasPrefix(memoriesDir, thoughtDir) {
 		t.Errorf("memoriesDir should be under thoughtDir")

@@ -97,11 +97,10 @@ was piped and no arguments were given — do NOT try to read stdin.
 
 ## Directories
 
-- lib: %s — persistent modules you can require()
-- tmp: %s — scratch space for downloads, temp files
+- workspace: %s — your scratch space for files, modules, temp data
 - memories: %s — text memories (loaded below)
 
-Use lib/ and tmp/ for ALL files you create. NEVER write to the current
+Use workspace/ for ALL files you create. NEVER write to the current
 working directory unless the script explicitly asks you to create output
 files there. The working directory belongs to the user, not to you.
 
@@ -129,8 +128,8 @@ Work incrementally. Write a partial memory.js that handles what you've
 figured out, and calls agent.resume() for parts that need more work:
 
   // memory.js for a complex task
-  var config = fs.exists("lib/config.json")
-    ? JSON.parse(fs.readFile("lib/config.json"))
+  var config = fs.exists("workspace/config.json")
+    ? JSON.parse(fs.readFile("workspace/config.json"))
     : null;
 
   if (!config) {
@@ -188,7 +187,7 @@ Use fs.writeFile with the memory.js path shown above.
 memory.js has access to all bridges:
 - fs, net, env, sys, console, process
 - agent.resume(context) — transfer control back to you
-- require(path) — load CommonJS modules from lib/
+- require(path) — load CommonJS modules from workspace/
 
 The context string you pass to agent.resume() is critical — it's the
 only information you'll receive about what went wrong. Be specific:
@@ -260,15 +259,14 @@ type Agent struct {
 	maxIterations int
 	scriptName    string
 	thoughtDir    string
-	libDir        string
-	tmpDir        string
+	workspaceDir  string
 	memoriesDir   string
 	memoryJSPath  string
 	cacheMode     string
 	resumeContext string
 }
 
-func New(p provider.Provider, r *tools.Registry, model string, maxTokens, maxIterations int, scriptName, thoughtDir, libDir, tmpDir, memoriesDir, memoryJSPath, cacheMode, resumeContext string) *Agent {
+func New(p provider.Provider, r *tools.Registry, model string, maxTokens, maxIterations int, scriptName, thoughtDir, workspaceDir, memoriesDir, memoryJSPath, cacheMode, resumeContext string) *Agent {
 	return &Agent{
 		provider:      p,
 		registry:      r,
@@ -277,8 +275,7 @@ func New(p provider.Provider, r *tools.Registry, model string, maxTokens, maxIte
 		maxIterations: maxIterations,
 		scriptName:    scriptName,
 		thoughtDir:    thoughtDir,
-		libDir:        libDir,
-		tmpDir:        tmpDir,
+		workspaceDir:  workspaceDir,
 		memoriesDir:   memoriesDir,
 		memoryJSPath:  memoryJSPath,
 		cacheMode:     cacheMode,
@@ -358,7 +355,7 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 		}
 		resp, err := a.provider.Chat(ctx, provider.ChatParams{
 			Model:     a.model,
-			System:    fmt.Sprintf(systemPromptTemplate, a.libDir, a.tmpDir, a.memoriesDir, a.memoryJSPath, memories),
+			System:    fmt.Sprintf(systemPromptTemplate, a.workspaceDir, a.memoriesDir, a.memoryJSPath, memories),
 			Messages:  messages,
 			Tools:     a.registry.Definitions(),
 			MaxTokens: a.maxTokens,

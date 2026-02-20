@@ -15,8 +15,7 @@ func TestNoMemoryJS(t *testing.T) {
 		MemoryJSPath: filepath.Join(dir, "memory.js"),
 		WorkDir:      dir,
 		ThoughtDir:   dir,
-		LibDir:       filepath.Join(dir, "lib"),
-		TmpDir:       filepath.Join(dir, "tmp"),
+		WorkspaceDir: filepath.Join(dir, "workspace"),
 		MemoriesDir:  filepath.Join(dir, "memories"),
 	}
 
@@ -44,8 +43,7 @@ func TestMemoryJSSuccess(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      dir,
 		ThoughtDir:   dir,
-		LibDir:       filepath.Join(dir, "lib"),
-		TmpDir:       filepath.Join(dir, "tmp"),
+		WorkspaceDir: filepath.Join(dir, "workspace"),
 		MemoriesDir:  filepath.Join(dir, "memories"),
 	}
 
@@ -77,8 +75,7 @@ func TestMemoryJSWithProcessStdout(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      dir,
 		ThoughtDir:   dir,
-		LibDir:       filepath.Join(dir, "lib"),
-		TmpDir:       filepath.Join(dir, "tmp"),
+		WorkspaceDir: filepath.Join(dir, "workspace"),
 		MemoriesDir:  filepath.Join(dir, "memories"),
 	}
 
@@ -106,8 +103,7 @@ func TestMemoryJSException(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      dir,
 		ThoughtDir:   dir,
-		LibDir:       filepath.Join(dir, "lib"),
-		TmpDir:       filepath.Join(dir, "tmp"),
+		WorkspaceDir: filepath.Join(dir, "workspace"),
 		MemoriesDir:  filepath.Join(dir, "memories"),
 	}
 
@@ -138,8 +134,7 @@ func TestMemoryJSReferenceError(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      dir,
 		ThoughtDir:   dir,
-		LibDir:       filepath.Join(dir, "lib"),
-		TmpDir:       filepath.Join(dir, "tmp"),
+		WorkspaceDir: filepath.Join(dir, "workspace"),
 		MemoriesDir:  filepath.Join(dir, "memories"),
 	}
 
@@ -167,8 +162,7 @@ func TestMemoryJSAgentResume(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      dir,
 		ThoughtDir:   dir,
-		LibDir:       filepath.Join(dir, "lib"),
-		TmpDir:       filepath.Join(dir, "tmp"),
+		WorkspaceDir: filepath.Join(dir, "workspace"),
 		MemoriesDir:  filepath.Join(dir, "memories"),
 	}
 
@@ -203,8 +197,7 @@ func TestMemoryJSAgentResumeAfterWork(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      dir,
 		ThoughtDir:   dir,
-		LibDir:       filepath.Join(dir, "lib"),
-		TmpDir:       filepath.Join(dir, "tmp"),
+		WorkspaceDir: filepath.Join(dir, "workspace"),
 		MemoriesDir:  filepath.Join(dir, "memories"),
 	}
 
@@ -233,8 +226,7 @@ func TestMemoryJSProcessArgs(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      dir,
 		ThoughtDir:   dir,
-		LibDir:       filepath.Join(dir, "lib"),
-		TmpDir:       filepath.Join(dir, "tmp"),
+		WorkspaceDir: filepath.Join(dir, "workspace"),
 		MemoriesDir:  filepath.Join(dir, "memories"),
 		Args:         []string{"arg1", "arg2", "arg3"},
 	}
@@ -251,13 +243,13 @@ func TestMemoryJSProcessArgs(t *testing.T) {
 
 func TestMemoryJSFileAccess(t *testing.T) {
 	dir := t.TempDir()
-	libDir := filepath.Join(dir, "lib")
-	os.MkdirAll(libDir, 0700)
+	workspaceDir := filepath.Join(dir, "workspace")
+	os.MkdirAll(workspaceDir, 0700)
 
 	memoryJSPath := filepath.Join(dir, "memory.js")
 
-	// Create a file in lib
-	testFile := filepath.Join(libDir, "data.txt")
+	// Create a file in workspace
+	testFile := filepath.Join(workspaceDir, "data.txt")
 	err := os.WriteFile(testFile, []byte("test data"), 0644)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
@@ -274,8 +266,7 @@ func TestMemoryJSFileAccess(t *testing.T) {
 		MemoryJSPath: memoryJSPath,
 		WorkDir:      dir,
 		ThoughtDir:   dir,
-		LibDir:       libDir,
-		TmpDir:       filepath.Join(dir, "tmp"),
+		WorkspaceDir: workspaceDir,
 		MemoriesDir:  filepath.Join(dir, "memories"),
 	}
 

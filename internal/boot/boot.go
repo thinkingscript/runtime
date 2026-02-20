@@ -26,8 +26,7 @@ type Config struct {
 	MemoryJSPath string
 	WorkDir      string
 	ThoughtDir   string // readable but NOT writable (protects policy.json)
-	LibDir       string
-	TmpDir       string
+	WorkspaceDir string
 	MemoriesDir  string
 	Args         []string
 	ApprovePath  func(op, path string) (bool, error)
@@ -57,10 +56,10 @@ func TryMemoryJS(ctx context.Context, cfg Config) Result {
 
 	// Create sandbox
 	// SECURITY: ThoughtDir is readable but NOT writable (protects policy.json)
-	// Only memory.js, lib, tmp, and memories are writable
+	// Only memory.js, workspace, and memories are writable
 	sb, err := sandbox.New(sandbox.Config{
-		AllowedPaths:  []string{cfg.WorkDir, cfg.ThoughtDir, cfg.LibDir, cfg.TmpDir, cfg.MemoriesDir},
-		WritablePaths: []string{cfg.LibDir, cfg.TmpDir, cfg.MemoriesDir, cfg.MemoryJSPath},
+		AllowedPaths:  []string{cfg.WorkDir, cfg.ThoughtDir, cfg.WorkspaceDir, cfg.MemoriesDir},
+		WritablePaths: []string{cfg.WorkspaceDir, cfg.MemoriesDir, cfg.MemoryJSPath},
 		WorkDir:       cfg.WorkDir,
 		Stderr:        os.Stderr,
 		Args:          cfg.Args,

@@ -18,12 +18,11 @@ var (
 var resetCmd = &cobra.Command{
 	Use:   "reset <name|file>",
 	Short: "Reset a thought's state",
-	Long: `Reset a thought's memory.js, lib/, and tmp/ directories.
+	Long: `Reset a thought's memory.js and workspace/ directory.
 
 By default, this command removes:
   - memory.js (the static script)
-  - lib/ (persistent modules)
-  - tmp/ (scratch files)
+  - workspace/ (agent's scratch space)
 
 Use --memories to also clear the memories/ directory.
 Use --policy to also reset policy.json to defaults.
@@ -60,12 +59,11 @@ func runReset(cmd *cobra.Command, args []string) error {
 
 	// Define what to clear
 	memoryJS := filepath.Join(thoughtDir, "memory.js")
-	libDir := filepath.Join(thoughtDir, "lib")
-	tmpDir := filepath.Join(thoughtDir, "tmp")
+	workspaceDir := filepath.Join(thoughtDir, "workspace")
 	memoriesDir := filepath.Join(thoughtDir, "memories")
 	policyJSON := filepath.Join(thoughtDir, "policy.json")
 
-	// Always clear: memory.js, lib/, tmp/
+	// Always clear: memory.js, workspace/
 	cleared := []string{}
 
 	if _, err := os.Stat(memoryJS); err == nil {
@@ -75,18 +73,11 @@ func runReset(cmd *cobra.Command, args []string) error {
 		cleared = append(cleared, "memory.js")
 	}
 
-	if _, err := os.Stat(libDir); err == nil {
-		if err := os.RemoveAll(libDir); err != nil {
-			return fmt.Errorf("removing lib/: %w", err)
+	if _, err := os.Stat(workspaceDir); err == nil {
+		if err := os.RemoveAll(workspaceDir); err != nil {
+			return fmt.Errorf("removing workspace/: %w", err)
 		}
-		cleared = append(cleared, "lib/")
-	}
-
-	if _, err := os.Stat(tmpDir); err == nil {
-		if err := os.RemoveAll(tmpDir); err != nil {
-			return fmt.Errorf("removing tmp/: %w", err)
-		}
-		cleared = append(cleared, "tmp/")
+		cleared = append(cleared, "workspace/")
 	}
 
 	// Optionally clear memories/

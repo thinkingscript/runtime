@@ -109,12 +109,10 @@ func runScript(cmd *cobra.Command, args []string) error {
 	// Set up sandbox paths — resolve to absolute so the LLM sees full paths
 	workDir, _ := os.Getwd()
 	thoughtDir, _ := filepath.Abs(config.ThoughtDir(scriptPath))
-	libDir, _ := filepath.Abs(config.LibDir(scriptPath))
-	tmpDir, _ := filepath.Abs(config.TmpDir(scriptPath))
+	workspaceDir, _ := filepath.Abs(config.WorkspaceDir(scriptPath))
 	memoriesDir, _ := filepath.Abs(config.MemoriesDir(scriptPath))
 	memoryJSPath, _ := filepath.Abs(config.MemoryJSPath(scriptPath))
-	os.MkdirAll(libDir, 0700)
-	os.MkdirAll(tmpDir, 0700)
+	os.MkdirAll(workspaceDir, 0700)
 	os.MkdirAll(memoriesDir, 0700)
 
 	// Set up approval system
@@ -122,8 +120,8 @@ func runScript(cmd *cobra.Command, args []string) error {
 	approver := approval.NewApprover(thoughtDir, globalPolicyPath)
 	defer approver.Close()
 
-	// Bootstrap default policy entries for lib, tmp, memories, and CWD
-	approver.BootstrapDefaults(libDir, tmpDir, memoriesDir, workDir)
+	// Bootstrap default policy entries for workspace, memories, and CWD
+	approver.BootstrapDefaults(workspaceDir, memoriesDir, workDir)
 
 	// Try memory.js first (static execution without agent)
 	resumeContext := ""
@@ -133,10 +131,10 @@ func runScript(cmd *cobra.Command, args []string) error {
 			resumeContext = fmt.Sprintf("failed to read memory.js: %s", err)
 		} else {
 			// SECURITY: ThoughtDir is readable but NOT writable (protects policy.json)
-			// Only memory.js, lib, tmp, and memories are writable
+			// Only memory.js, workspace, and memories are writable
 			sb, err := sandbox.New(sandbox.Config{
-				AllowedPaths:  []string{workDir, thoughtDir, libDir, tmpDir, memoriesDir},
-				WritablePaths: []string{libDir, tmpDir, memoriesDir, memoryJSPath},
+				AllowedPaths:  []string{workDir, thoughtDir, workspaceDir, memoriesDir},
+				WritablePaths: []string{workspaceDir, memoriesDir, memoryJSPath},
 				WorkDir:       workDir,
 				Stderr:        os.Stderr,
 				Args:          args[1:],
@@ -170,7 +168,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set up tool registry
-	registry := tools.NewRegistry(approver, workDir, thoughtDir, libDir, tmpDir, memoriesDir, memoryJSPath, scriptPath)
+	registry := tools.NewRegistry(approver, workDir, thoughtDir, workspaceDir, memoriesDir, memoryJSPath, scriptPath)
 
 	// Create provider
 	p, err := createProvider(resolved)
@@ -188,7 +186,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 	}
 
 	// Run agent loop
-	a := agent.New(p, registry, resolved.Model, resolved.MaxTokens, resolved.MaxIterations, scriptPath, thoughtDir, libDir, tmpDir, memoriesDir, memoryJSPath, mode, resumeContext)
+	a := agent.New(p, registry, resolved.Model, resolved.MaxTokens, resolved.MaxIterations, scriptPath, thoughtDir, workspaceDir, memoriesDir, memoryJSPath, mode, resumeContext)
 	return a.Run(cmd.Context(), prompt)
 }
 

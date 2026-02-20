@@ -55,27 +55,15 @@ func TestThoughtDir(t *testing.T) {
 	}
 }
 
-func TestLibDir(t *testing.T) {
+func TestWorkspaceDir(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("THINKINGSCRIPT_HOME", tmpHome)
 
-	got := LibDir("weather.md")
-	want := filepath.Join(tmpHome, "thoughts", "weather", "lib")
+	got := WorkspaceDir("weather.md")
+	want := filepath.Join(tmpHome, "thoughts", "weather", "workspace")
 
 	if got != want {
-		t.Errorf("LibDir() = %q, want %q", got, want)
-	}
-}
-
-func TestTmpDir(t *testing.T) {
-	tmpHome := t.TempDir()
-	t.Setenv("THINKINGSCRIPT_HOME", tmpHome)
-
-	got := TmpDir("weather.md")
-	want := filepath.Join(tmpHome, "thoughts", "weather", "tmp")
-
-	if got != want {
-		t.Errorf("TmpDir() = %q, want %q", got, want)
+		t.Errorf("WorkspaceDir() = %q, want %q", got, want)
 	}
 }
 

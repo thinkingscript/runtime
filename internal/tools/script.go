@@ -19,10 +19,10 @@ type runScriptInput struct {
 	Code string `json:"code"`
 }
 
-func (r *Registry) registerScript(approver *approval.Approver, workDir, thoughtDir, libDir, tmpDir, memoriesDir, memoryJSPath, scriptName string) {
+func (r *Registry) registerScript(approver *approval.Approver, workDir, thoughtDir, workspaceDir, memoriesDir, memoryJSPath, scriptName string) {
 	r.register(provider.ToolDefinition{
 		Name:        "run_script",
-		Description: "Execute JavaScript code in a sandboxed runtime. Has access to the filesystem (current directory read-only; lib, tmp, and memories read-write; memory.js read-write; other paths require user approval), HTTP, environment variables, and system info. Use this for all tasks: file I/O, data processing, HTTP requests, and transformations.",
+		Description: "Execute JavaScript code in a sandboxed runtime. Has access to the filesystem (current directory read-only; workspace and memories read-write; memory.js read-write; other paths require user approval), HTTP, environment variables, and system info. Use this for all tasks: file I/O, data processing, HTTP requests, and transformations.",
 		InputSchema: provider.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]any{
@@ -44,13 +44,13 @@ func (r *Registry) registerScript(approver *approval.Approver, workDir, thoughtD
 		detailStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
 
 		// SECURITY: Carefully control what paths are writable.
-		// - lib, tmp, memories directories are writable
+		// - workspace, memories directories are writable
 		// - memory.js is writable as an EXACT file match
 		// - thoughtDir is readable but NOT writable (protects policy.json)
 		// - Other paths go through ApprovePath
 		sb, err := sandbox.New(sandbox.Config{
-			AllowedPaths:  []string{workDir, thoughtDir, libDir, tmpDir, memoriesDir},
-			WritablePaths: []string{libDir, tmpDir, memoriesDir, memoryJSPath},
+			AllowedPaths:  []string{workDir, thoughtDir, workspaceDir, memoriesDir},
+			WritablePaths: []string{workspaceDir, memoriesDir, memoryJSPath},
 			WorkDir:       workDir,
 			Stderr:        os.Stderr,
 			ApprovePath:   approver.ApprovePath,
