@@ -2,14 +2,13 @@ package config
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -20,24 +19,24 @@ const (
 )
 
 type Config struct {
-	Version       int    `yaml:"version"`
-	Agent         string `yaml:"agent"`
-	MaxTokens     int    `yaml:"max_tokens"`
-	MaxIterations int    `yaml:"max_iterations"`
+	Version       int    `json:"version"`
+	Agent         string `json:"agent"`
+	MaxTokens     int    `json:"max_tokens"`
+	MaxIterations int    `json:"max_iterations"`
 }
 
 type AgentConfig struct {
-	Version  int    `yaml:"version"`
-	Provider string `yaml:"provider"`
-	APIKey   string `yaml:"api_key"`
-	APIBase  string `yaml:"api_base"`
-	Model    string `yaml:"model"`
+	Version  int    `json:"version"`
+	Provider string `json:"provider"`
+	APIKey   string `json:"api_key"`
+	APIBase  string `json:"api_base"`
+	Model    string `json:"model"`
 }
 
 type ScriptConfig struct {
-	Agent     string `yaml:"agent"`
-	Model     string `yaml:"model"`
-	MaxTokens *int   `yaml:"max_tokens"`
+	Agent     string `json:"agent" yaml:"agent"`
+	Model     string `json:"model" yaml:"model"`
+	MaxTokens *int   `json:"max_tokens" yaml:"max_tokens"`
 }
 
 // ResolvedConfig holds the final merged configuration.
@@ -121,12 +120,12 @@ func LoadConfig() *Config {
 		MaxIterations: DefaultMaxIterations,
 	}
 
-	path := filepath.Join(HomeDir(), "config.yaml")
+	path := filepath.Join(HomeDir(), "config.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return cfg
 	}
-	_ = yaml.Unmarshal(data, cfg)
+	_ = json.Unmarshal(data, cfg)
 
 	if cfg.Agent == "" {
 		cfg.Agent = DefaultAgent
@@ -142,12 +141,12 @@ func LoadConfig() *Config {
 
 func LoadAgent(name string) *AgentConfig {
 	agent := &AgentConfig{}
-	path := filepath.Join(HomeDir(), "agents", name+".yaml")
+	path := filepath.Join(HomeDir(), "agents", name+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return agent
 	}
-	_ = yaml.Unmarshal(data, agent)
+	_ = json.Unmarshal(data, agent)
 	return agent
 }
 
@@ -157,11 +156,11 @@ func SaveAgent(name string, agent *AgentConfig) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("creating agents directory: %w", err)
 	}
-	data, err := yaml.Marshal(agent)
+	data, err := json.MarshalIndent(agent, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling agent config: %w", err)
 	}
-	path := filepath.Join(dir, name+".yaml")
+	path := filepath.Join(dir, name+".json")
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("writing agent config: %w", err)
 	}
@@ -276,14 +275,3 @@ func WriteFingerprint(cacheDir, fingerprint string) error {
 	return os.WriteFile(filepath.Join(cacheDir, "fingerprint"), []byte(fingerprint), 0644)
 }
 
-// WriteMeta stores script metadata in the cache directory.
-func WriteMeta(cacheDir, scriptPath string) error {
-	meta := map[string]string{
-		"script_path": scriptPath,
-	}
-	data, err := yaml.Marshal(meta)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(cacheDir, "meta.yaml"), data, 0644)
-}
