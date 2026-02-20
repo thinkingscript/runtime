@@ -42,7 +42,11 @@
       "Bash(git push:*)",
       "Bash(cat:*)",
       "Bash(./bin/thought:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(GOTOOLCHAIN=auto go build:*)",
+      "Bash(GOTOOLCHAIN=auto go test:*)",
+      "Bash(GOTOOLCHAIN=auto go vet:*)",
+      "Bash(bundle install:*)"
     ]
   }
 }
