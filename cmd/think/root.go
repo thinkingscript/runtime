@@ -89,9 +89,6 @@ func runScript(cmd *cobra.Command, args []string) error {
 		if err := config.WriteFingerprint(cacheDir, parsed.Fingerprint); err != nil {
 			return fmt.Errorf("writing fingerprint: %w", err)
 		}
-		if err := config.WriteMeta(cacheDir, scriptPath); err != nil {
-			return fmt.Errorf("writing meta: %w", err)
-		}
 	}
 
 	if mode == "ephemeral" {
@@ -108,18 +105,21 @@ func runScript(cmd *cobra.Command, args []string) error {
 		stdinData = string(data)
 	}
 
-	// Set up approval system
-	thoughtDir, _ := filepath.Abs(config.ThoughtDir(scriptPath))
-	globalPolicyPath, _ := filepath.Abs(filepath.Join(config.HomeDir(), "policy.yaml"))
-	approver := approval.NewApprover(thoughtDir, globalPolicyPath)
-	defer approver.Close()
-
 	// Set up sandbox paths — resolve to absolute so the LLM sees full paths
 	workDir, _ := os.Getwd()
 	workspaceDir, _ := filepath.Abs(config.WorkspaceDir(scriptPath))
 	os.MkdirAll(workspaceDir, 0700)
 	memoriesDir, _ := filepath.Abs(config.MemoriesDir(scriptPath))
 	os.MkdirAll(memoriesDir, 0700)
+
+	// Set up approval system
+	thoughtDir, _ := filepath.Abs(config.ThoughtDir(scriptPath))
+	globalPolicyPath, _ := filepath.Abs(filepath.Join(config.HomeDir(), "policy.json"))
+	approver := approval.NewApprover(thoughtDir, globalPolicyPath)
+	defer approver.Close()
+
+	// Bootstrap default policy entries for workspace, memories, and CWD
+	approver.BootstrapDefaults(workspaceDir, memoriesDir, workDir)
 
 	// Set up tool registry
 	registry := tools.NewRegistry(approver, workDir, workspaceDir, memoriesDir, scriptPath)

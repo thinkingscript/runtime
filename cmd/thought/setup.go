@@ -88,7 +88,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("saving config: %w", err)
 	}
 
-	configPath := filepath.Join(config.HomeDir(), "agents", "anthropic.yaml")
+	configPath := filepath.Join(config.HomeDir(), "agents", "anthropic.json")
 	fmt.Fprintf(os.Stderr, "\n  Config saved to %s\n", configPath)
 	fmt.Fprintf(os.Stderr, "  Try it out: think examples/weather.md \"San Francisco\"\n")
 	return nil
