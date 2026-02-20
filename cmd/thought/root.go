@@ -23,6 +23,8 @@ func init() {
 	rootCmd.AddCommand(cacheCmd)
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(installCmd)
+	rootCmd.AddCommand(lsCmd)
+	rootCmd.AddCommand(rmCmd)
 	rootCmd.AddCommand(memoryCmd)
 	rootCmd.AddCommand(workspaceCmd)
 	rootCmd.AddCommand(setupCmd)
