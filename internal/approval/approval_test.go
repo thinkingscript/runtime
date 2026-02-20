@@ -51,12 +51,14 @@ func TestHasMode(t *testing.T) {
 func TestBootstrapDefaults(t *testing.T) {
 	dir := t.TempDir()
 	thoughtDir := filepath.Join(dir, "thought")
-	workspaceDir := filepath.Join(dir, "workspace")
+	libDir := filepath.Join(dir, "lib")
+	tmpDir := filepath.Join(dir, "tmp")
 	memoriesDir := filepath.Join(dir, "memories")
 	workDir := filepath.Join(dir, "cwd")
 
 	os.MkdirAll(thoughtDir, 0700)
-	os.MkdirAll(workspaceDir, 0700)
+	os.MkdirAll(libDir, 0700)
+	os.MkdirAll(tmpDir, 0700)
 	os.MkdirAll(memoriesDir, 0700)
 	os.MkdirAll(workDir, 0700)
 
@@ -65,7 +67,7 @@ func TestBootstrapDefaults(t *testing.T) {
 	defer approver.Close()
 
 	// Bootstrap defaults
-	approver.BootstrapDefaults(workspaceDir, memoriesDir, workDir)
+	approver.BootstrapDefaults(libDir, tmpDir, memoriesDir, workDir)
 
 	// Verify policy was created
 	policyPath := filepath.Join(thoughtDir, "policy.json")
@@ -79,28 +81,29 @@ func TestBootstrapDefaults(t *testing.T) {
 		t.Fatalf("failed to load policy: %v", err)
 	}
 
-	if len(policy.Paths.Entries) != 3 {
-		t.Errorf("expected 3 path entries, got %d", len(policy.Paths.Entries))
+	// Should have 5 entries: lib, tmp, memories, cwd, policy.json (denied)
+	if len(policy.Paths.Entries) != 5 {
+		t.Errorf("expected 5 path entries, got %d", len(policy.Paths.Entries))
 	}
 
-	// Check workspace entry
+	// Check lib entry
 	found := false
 	for _, entry := range policy.Paths.Entries {
-		if entry.Path == workspaceDir {
+		if entry.Path == libDir {
 			found = true
 			if entry.Mode != "rwd" {
-				t.Errorf("workspace mode = %q, want rwd", entry.Mode)
+				t.Errorf("lib mode = %q, want rwd", entry.Mode)
 			}
 			if entry.Approval != ApprovalAllow {
-				t.Errorf("workspace approval = %q, want allow", entry.Approval)
+				t.Errorf("lib approval = %q, want allow", entry.Approval)
 			}
 			if entry.Source != SourceDefault {
-				t.Errorf("workspace source = %q, want default", entry.Source)
+				t.Errorf("lib source = %q, want default", entry.Source)
 			}
 		}
 	}
 	if !found {
-		t.Error("workspace entry not found")
+		t.Error("lib entry not found")
 	}
 
 	// Check CWD entry (should be read-only)
@@ -116,12 +119,27 @@ func TestBootstrapDefaults(t *testing.T) {
 	if !found {
 		t.Error("workDir entry not found")
 	}
+
+	// Check policy.json entry (should be denied)
+	found = false
+	for _, entry := range policy.Paths.Entries {
+		if entry.Path == policyPath {
+			found = true
+			if entry.Approval != ApprovalDeny {
+				t.Errorf("policy.json approval = %q, want deny", entry.Approval)
+			}
+		}
+	}
+	if !found {
+		t.Error("policy.json deny entry not found")
+	}
 }
 
 func TestBootstrapDefaultsSkipsIfExists(t *testing.T) {
 	dir := t.TempDir()
 	thoughtDir := filepath.Join(dir, "thought")
-	workspaceDir := filepath.Join(dir, "workspace")
+	libDir := filepath.Join(dir, "lib")
+	tmpDir := filepath.Join(dir, "tmp")
 	memoriesDir := filepath.Join(dir, "memories")
 	workDir := filepath.Join(dir, "cwd")
 
@@ -129,7 +147,7 @@ func TestBootstrapDefaultsSkipsIfExists(t *testing.T) {
 
 	// Create approver and bootstrap once
 	approver := NewApprover(thoughtDir, "")
-	approver.BootstrapDefaults(workspaceDir, memoriesDir, workDir)
+	approver.BootstrapDefaults(libDir, tmpDir, memoriesDir, workDir)
 	approver.Close()
 
 	// Add a custom entry
@@ -140,7 +158,7 @@ func TestBootstrapDefaultsSkipsIfExists(t *testing.T) {
 	// Create new approver and try to bootstrap again
 	approver2 := NewApprover(thoughtDir, "")
 	defer approver2.Close()
-	approver2.BootstrapDefaults("/other/workspace", "/other/memories", "/other/cwd")
+	approver2.BootstrapDefaults("/other/lib", "/other/tmp", "/other/memories", "/other/cwd")
 
 	// Verify custom entry is still there (bootstrap was skipped)
 	policy2, _ := LoadPolicy(filepath.Join(thoughtDir, "policy.json"))

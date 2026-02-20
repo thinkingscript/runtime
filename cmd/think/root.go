@@ -2,17 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strings"
-
 	"path/filepath"
+	"strings"
 
 	"github.com/thinkingscript/cli/internal/agent"
 	"github.com/thinkingscript/cli/internal/approval"
 	"github.com/thinkingscript/cli/internal/config"
 	"github.com/thinkingscript/cli/internal/provider"
+	"github.com/thinkingscript/cli/internal/sandbox"
 	"github.com/thinkingscript/cli/internal/script"
 	"github.com/thinkingscript/cli/internal/tools"
 	"github.com/spf13/cobra"
@@ -107,22 +108,69 @@ func runScript(cmd *cobra.Command, args []string) error {
 
 	// Set up sandbox paths — resolve to absolute so the LLM sees full paths
 	workDir, _ := os.Getwd()
-	workspaceDir, _ := filepath.Abs(config.WorkspaceDir(scriptPath))
-	os.MkdirAll(workspaceDir, 0700)
+	thoughtDir, _ := filepath.Abs(config.ThoughtDir(scriptPath))
+	libDir, _ := filepath.Abs(config.LibDir(scriptPath))
+	tmpDir, _ := filepath.Abs(config.TmpDir(scriptPath))
 	memoriesDir, _ := filepath.Abs(config.MemoriesDir(scriptPath))
+	memoryJSPath, _ := filepath.Abs(config.MemoryJSPath(scriptPath))
+	os.MkdirAll(libDir, 0700)
+	os.MkdirAll(tmpDir, 0700)
 	os.MkdirAll(memoriesDir, 0700)
 
 	// Set up approval system
-	thoughtDir, _ := filepath.Abs(config.ThoughtDir(scriptPath))
 	globalPolicyPath, _ := filepath.Abs(filepath.Join(config.HomeDir(), "policy.json"))
 	approver := approval.NewApprover(thoughtDir, globalPolicyPath)
 	defer approver.Close()
 
-	// Bootstrap default policy entries for workspace, memories, and CWD
-	approver.BootstrapDefaults(workspaceDir, memoriesDir, workDir)
+	// Bootstrap default policy entries for lib, tmp, memories, and CWD
+	approver.BootstrapDefaults(libDir, tmpDir, memoriesDir, workDir)
+
+	// Try memory.js first (static execution without agent)
+	resumeContext := ""
+	if _, err := os.Stat(memoryJSPath); err == nil {
+		code, err := os.ReadFile(memoryJSPath)
+		if err != nil {
+			resumeContext = fmt.Sprintf("failed to read memory.js: %s", err)
+		} else {
+			// SECURITY: ThoughtDir is readable but NOT writable (protects policy.json)
+			// Only memory.js, lib, tmp, and memories are writable
+			sb, err := sandbox.New(sandbox.Config{
+				AllowedPaths:  []string{workDir, thoughtDir, libDir, tmpDir, memoriesDir},
+				WritablePaths: []string{libDir, tmpDir, memoriesDir, memoryJSPath},
+				WorkDir:       workDir,
+				Stderr:        os.Stderr,
+				Args:          args[1:],
+				ApprovePath:   approver.ApprovePath,
+				ApproveEnv:    approver.ApproveEnvRead,
+				ApproveNet:    approver.ApproveNet,
+			})
+			if err != nil {
+				resumeContext = fmt.Sprintf("failed to create sandbox: %s", err)
+			} else {
+				result, err := sb.Run(cmd.Context(), string(code))
+				if err == nil {
+					// Success! memory.js handled everything
+					if result != "" {
+						fmt.Fprint(os.Stdout, result)
+					}
+					return nil
+				}
+
+				// Check if it's a resume request or an error
+				var resumeErr *sandbox.ResumeError
+				if errors.As(err, &resumeErr) {
+					resumeContext = resumeErr.Context
+				} else {
+					resumeContext = fmt.Sprintf("memory.js error: %s", err)
+				}
+			}
+		}
+	} else {
+		resumeContext = "no memory.js exists, first run"
+	}
 
 	// Set up tool registry
-	registry := tools.NewRegistry(approver, workDir, workspaceDir, memoriesDir, scriptPath)
+	registry := tools.NewRegistry(approver, workDir, thoughtDir, libDir, tmpDir, memoriesDir, memoryJSPath, scriptPath)
 
 	// Create provider
 	p, err := createProvider(resolved)
@@ -140,7 +188,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 	}
 
 	// Run agent loop
-	a := agent.New(p, registry, resolved.Model, resolved.MaxTokens, resolved.MaxIterations, scriptPath, workspaceDir, memoriesDir, mode)
+	a := agent.New(p, registry, resolved.Model, resolved.MaxTokens, resolved.MaxIterations, scriptPath, thoughtDir, libDir, tmpDir, memoriesDir, memoryJSPath, mode, resumeContext)
 	return a.Run(cmd.Context(), prompt)
 }
 

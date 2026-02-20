@@ -431,17 +431,23 @@ func truncate(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
-// BootstrapDefaults adds default policy entries for workspace and memories.
+// BootstrapDefaults adds default policy entries for lib, tmp, and memories.
 // These are auto-approved paths that the thought can always access.
-func (a *Approver) BootstrapDefaults(workspaceDir, memoriesDir, workDir string) {
+// Policy.json is explicitly denied to prevent privilege escalation.
+func (a *Approver) BootstrapDefaults(libDir, tmpDir, memoriesDir, workDir string) {
 	// Only bootstrap if no entries exist yet
 	if len(a.thoughtPolicy.Paths.Entries) > 0 {
 		return
 	}
 
-	// Workspace: full read/write/delete
-	if workspaceDir != "" {
-		a.thoughtPolicy.AddPathEntry(workspaceDir, "rwd", ApprovalAllow, SourceDefault)
+	// lib: full read/write/delete (persistent modules)
+	if libDir != "" {
+		a.thoughtPolicy.AddPathEntry(libDir, "rwd", ApprovalAllow, SourceDefault)
+	}
+
+	// tmp: full read/write/delete (scratch space)
+	if tmpDir != "" {
+		a.thoughtPolicy.AddPathEntry(tmpDir, "rwd", ApprovalAllow, SourceDefault)
 	}
 
 	// Memories: full read/write/delete
@@ -453,6 +459,11 @@ func (a *Approver) BootstrapDefaults(workspaceDir, memoriesDir, workDir string) 
 	if workDir != "" {
 		a.thoughtPolicy.AddPathEntry(workDir, "r", ApprovalAllow, SourceDefault)
 	}
+
+	// policy.json: ALWAYS deny to prevent privilege escalation
+	// The agent can never modify its own policy
+	policyPath := filepath.Join(a.thoughtDir, "policy.json")
+	a.thoughtPolicy.AddPathEntry(policyPath, "rwd", ApprovalDeny, SourceDefault)
 
 	a.saveThoughtPolicy()
 }

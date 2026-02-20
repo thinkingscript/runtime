@@ -21,6 +21,14 @@ func (s *Sandbox) registerFS(vm *goja.Runtime) {
 		if err != nil {
 			throwError(vm, err.Error())
 		}
+		// Check file size before reading
+		info, err := os.Stat(resolved)
+		if err != nil {
+			throwError(vm, fmt.Sprintf("fs.readFile: %s not found", path))
+		}
+		if info.Size() > MaxReadSize {
+			throwError(vm, fmt.Sprintf("fs.readFile: %s exceeds maximum read size (%d MB)", path, MaxReadSize>>20))
+		}
 		data, err := os.ReadFile(resolved)
 		if err != nil {
 			throwError(vm, fmt.Sprintf("fs.readFile: %s not found", path))
@@ -31,6 +39,10 @@ func (s *Sandbox) registerFS(vm *goja.Runtime) {
 	fs.Set("writeFile", func(call goja.FunctionCall) goja.Value {
 		path := call.Argument(0).String()
 		content := call.Argument(1).String()
+		// Check content size before writing
+		if len(content) > MaxWriteSize {
+			throwError(vm, fmt.Sprintf("fs.writeFile: content exceeds maximum write size (%d MB)", MaxWriteSize>>20))
+		}
 		resolved, err := s.resolvePath("write", path)
 		if err != nil {
 			throwError(vm, err.Error())
@@ -134,6 +146,14 @@ func (s *Sandbox) registerFS(vm *goja.Runtime) {
 		if err != nil {
 			throwError(vm, err.Error())
 		}
+		// Check source file size before copying
+		info, err := os.Stat(resolvedSrc)
+		if err != nil {
+			throwError(vm, fmt.Sprintf("fs.copy: cannot read %s", src))
+		}
+		if info.Size() > MaxCopySize {
+			throwError(vm, fmt.Sprintf("fs.copy: %s exceeds maximum copy size (%d MB)", src, MaxCopySize>>20))
+		}
 		resolvedDst, err := s.resolvePath("write", dst)
 		if err != nil {
 			throwError(vm, err.Error())
@@ -148,7 +168,8 @@ func (s *Sandbox) registerFS(vm *goja.Runtime) {
 			throwError(vm, fmt.Sprintf("fs.copy: cannot write %s", dst))
 		}
 		defer out.Close()
-		if _, err := io.Copy(out, in); err != nil {
+		// Use LimitReader as defense in depth
+		if _, err := io.Copy(out, io.LimitReader(in, MaxCopySize+1)); err != nil {
 			throwError(vm, fmt.Sprintf("fs.copy: failed copying %s to %s", src, dst))
 		}
 		if err := out.Sync(); err != nil {
@@ -177,6 +198,10 @@ func (s *Sandbox) registerFS(vm *goja.Runtime) {
 	fs.Set("appendFile", func(call goja.FunctionCall) goja.Value {
 		path := call.Argument(0).String()
 		content := call.Argument(1).String()
+		// Check content size before appending
+		if len(content) > MaxAppendSize {
+			throwError(vm, fmt.Sprintf("fs.appendFile: content exceeds maximum append size (%d MB)", MaxAppendSize>>20))
+		}
 		resolved, err := s.resolvePath("write", path)
 		if err != nil {
 			throwError(vm, err.Error())

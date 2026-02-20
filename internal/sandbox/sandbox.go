@@ -15,6 +15,16 @@ import (
 	"github.com/dop251/goja_nodejs/require"
 )
 
+// Resource limits
+const (
+	DefaultTimeout   = 30 * time.Second // Max execution time
+	MaxWriteSize     = 10 << 20         // 10 MB max write per file
+	MaxReadSize      = 50 << 20         // 50 MB max read per file
+	MaxCopySize      = 50 << 20         // 50 MB max copy per file
+	MaxAppendSize    = 10 << 20         // 10 MB max append per call
+	MaxNetRespSize   = 50 << 20         // 50 MB max network response
+)
+
 // Config holds everything needed to create a sandbox.
 type Config struct {
 	AllowedPaths  []string      // Resolved absolute paths the sandbox may read freely (CWD, workspace)
@@ -80,6 +90,11 @@ func New(cfg Config) (*Sandbox, error) {
 		}
 	}
 
+	// Apply default timeout if not set
+	if cfg.Timeout == 0 {
+		cfg.Timeout = DefaultTimeout
+	}
+
 	return &Sandbox{cfg: cfg, allowedPaths: resolved, writablePaths: writable}, nil
 }
 
@@ -95,6 +110,7 @@ func (s *Sandbox) Run(ctx context.Context, code string) (result string, err erro
 	s.registerEnv(vm)
 	s.registerProcess(vm)
 	s.registerSys(vm)
+	s.registerAgent(vm)
 
 	// Enable require() with sandbox-aware source loading
 	registry := require.NewRegistry(
@@ -127,10 +143,13 @@ func (s *Sandbox) Run(ctx context.Context, code string) (result string, err erro
 		defer timer.Stop()
 	}
 
-	// Catch panics from goja (e.g., process.exit)
+	// Catch panics from goja (e.g., process.exit, agent.resume)
 	defer func() {
 		if r := recover(); r != nil {
-			if exitErr, ok := r.(*exitError); ok {
+			if resumeErr, ok := r.(*ResumeError); ok {
+				// agent.resume() was called - pass the error up
+				err = resumeErr
+			} else if exitErr, ok := r.(*exitError); ok {
 				if exitErr.code == 0 {
 					err = nil
 				} else {

@@ -15,21 +15,21 @@ var workspaceOpenFlag bool
 var workspaceCmd = &cobra.Command{
 	Use:          "workspace <script>",
 	Aliases:      []string{"ws"},
-	Short:        "Show or open a script's workspace directory",
+	Short:        "Show or open a thought's directory (lib, tmp, memory.js, etc.)",
 	Args:         cobra.ExactArgs(1),
 	RunE:         runWorkspace,
 	SilenceUsage: true,
 }
 
 func init() {
-	workspaceCmd.Flags().BoolVar(&workspaceOpenFlag, "open", false, "Open the workspace directory in Finder/file manager")
+	workspaceCmd.Flags().BoolVar(&workspaceOpenFlag, "open", false, "Open the thought directory in Finder/file manager")
 }
 
 func runWorkspace(cmd *cobra.Command, args []string) error {
 	scriptPath := args[0]
-	workspaceDir := config.WorkspaceDir(scriptPath)
-	if _, err := os.Stat(workspaceDir); os.IsNotExist(err) {
-		fmt.Fprintln(os.Stderr, "No workspace yet.")
+	thoughtDir := config.ThoughtDir(scriptPath)
+	if _, err := os.Stat(thoughtDir); os.IsNotExist(err) {
+		fmt.Fprintln(os.Stderr, "No thought data yet.")
 		return nil
 	}
 
@@ -43,9 +43,9 @@ func runWorkspace(cmd *cobra.Command, args []string) error {
 		default:
 			return fmt.Errorf("open not supported on %s", runtime.GOOS)
 		}
-		return exec.Command(open, workspaceDir).Run()
+		return exec.Command(open, thoughtDir).Run()
 	}
 
-	fmt.Println(workspaceDir)
+	fmt.Println(thoughtDir)
 	return nil
 }

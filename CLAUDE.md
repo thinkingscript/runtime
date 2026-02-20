@@ -27,33 +27,59 @@ For development, set `THINKINGSCRIPT_HOME=./thinkingscript` to avoid writing to 
 
 ```
 cmd/think/main.go        → Signal handling, calls execute()
-cmd/think/root.go        → Cobra root: parse script, resolve config, run agent loop
+cmd/think/root.go        → Cobra root: parse script, try memory.js, run agent loop
 cmd/thought/main.go      → Signal handling, calls execute()
 cmd/thought/root.go      → Cobra root: container for subcommands
 cmd/thought/cache.go     → `thought cache` subcommand
 cmd/thought/build.go     → `thought build` subcommand
 internal/agent/          → Core agent loop (provider-agnostic)
+internal/boot/           → memory.js execution logic
 internal/provider/       → Provider interface + Anthropic adapter
 internal/config/         → Home dir, config.json, agents, fingerprinting
 internal/script/         → Script parser (shebang + frontmatter + prompt)
 internal/tools/          → Tool registry + implementations (stdio, script)
-internal/sandbox/        → Sandboxed JS runtime (goja) with fs/net/env/sys bridges
+internal/sandbox/        → Sandboxed JS runtime (goja) with fs/net/env/sys/agent bridges
 internal/approval/       → Charm huh approval prompts + persistence
+```
+
+### Execution Flow (cmd/think/root.go)
+
+When `think` runs, it follows this flow:
+
+1. Parse script (shebang + frontmatter + prompt)
+2. **Try memory.js first** — if it exists and succeeds, output result and exit (no agent)
+3. If memory.js fails, errors, or calls `agent.resume()`, start the agent loop
+4. Agent runs, uses tools, and ideally writes/improves `memory.js` for next time
+
+The goal is **convergence**: thoughts should evolve toward static `memory.js` that runs without needing the agent. A simple "print hello world" thought should eventually become `console.log("hello world")` in memory.js.
+
+### Thought Directory Structure
+
+```
+~/.thinkingscript/thoughts/<name>/
+├── memory.js       # Static script (runs first, no agent needed if it works)
+├── lib/            # Persistent modules memory.js can require()
+├── tmp/            # Scratch space for downloads, temp files
+├── memories/       # Text memories (injected into agent prompt)
+└── policy.json     # Approval policy (agent CANNOT modify this)
 ```
 
 ### Wiring (cmd/think/root.go)
 
 Everything is wired in `runScript()`:
 1. `approval.NewApprover(thoughtDir, globalPolicyPath)` — policy-based approval system
-2. `tools.NewRegistry(approver, workDir, workspaceDir)` — tool registry with two tools
+2. Try memory.js via sandbox — if success, done; if error/resume, continue to agent
+3. `tools.NewRegistry(approver, workDir, thoughtDir, libDir, tmpDir, memoriesDir)` — tool registry
 
 Stdin data and CLI arguments are injected directly into the prompt (no tool call needed).
 
 ### Security Model: The Sandbox Boundary
 
-**The sandbox (goja JS runtime) is the security boundary.** CWD is read-only — reads are unrestricted but writes to CWD require user approval. Workspace and memories directories are fully read-write. Accessing paths outside these directories prompts the user for approval. Environment variable reads prompt the user for approval. Network access requires user approval. There is no shell access — system introspection (CPU, memory, uptime, load) is provided through the `sys` bridge.
+**The sandbox (goja JS runtime) is the security boundary.** CWD is read-only — reads are unrestricted but writes to CWD require user approval. lib/, tmp/, and memories/ directories are fully read-write. memory.js is read-write. Accessing paths outside these directories prompts the user for approval. Environment variable reads prompt the user for approval. Network access requires user approval. There is no shell access — system introspection (CPU, memory, uptime, load) is provided through the `sys` bridge.
 
-CommonJS `require()` is available for loading modules. Modules are loaded through the same sandbox path checks — paths inside CWD/workspace load freely, paths outside require approval.
+**policy.json is always denied** — the agent cannot modify its own privileges.
+
+CommonJS `require()` is available for loading modules. Modules are loaded through the same sandbox path checks — paths inside CWD/lib load freely, paths outside require approval.
 
 If you add a new bridge function that touches the host system beyond the sandbox's allowed paths, network, or env — it needs approval. No exceptions.
 
@@ -69,17 +95,19 @@ Tools: `write_stdout`, `run_script`.
 ### Sandbox (internal/sandbox/)
 
 The JS runtime uses `github.com/dop251/goja` (pure Go, no CGo) with `goja_nodejs` for CommonJS `require()` support. Bridge files:
-- `bridge_fs.go` — `fs.readFile`, `fs.writeFile`, `fs.appendFile`, `fs.readDir`, `fs.stat`, `fs.exists`, `fs.delete`, `fs.mkdir`, `fs.copy`, `fs.move`, `fs.glob` (CWD read-only; workspace + memories read-write; other paths prompt for approval)
+- `bridge_fs.go` — `fs.readFile`, `fs.writeFile`, `fs.appendFile`, `fs.readDir`, `fs.stat`, `fs.exists`, `fs.delete`, `fs.mkdir`, `fs.copy`, `fs.move`, `fs.glob` (CWD read-only; lib + tmp + memories read-write; other paths prompt for approval)
 - `bridge_net.go` — `net.fetch(url, options?)` (requires user approval)
 - `bridge_env.go` — `env.get(name)` (prompts user for approval)
 - `bridge_sys.go` — `sys.platform()`, `sys.arch()`, `sys.cpus()`, `sys.totalmem()`, `sys.freemem()`, `sys.uptime()`, `sys.loadavg()` (system introspection)
 - `bridge_console.go` — `console.log`, `console.error` → stderr
 - `bridge_process.go` — `process.cwd()`, `process.args`, `process.exit(code)`
+- `bridge_agent.go` — `agent.resume(context?)` — transfers control to the agent
 
 Key details:
 - All JS is synchronous. No async/await/Promises.
 - Objects returned from run_script or logged via console.log are auto-JSON.stringified (so the LLM sees real data, not `[object Object]`).
 - Errors use `throwError()` for clean messages (no Go stack traces leaking to the LLM).
+- `agent.resume(context)` triggers a `ResumeError` that signals the agent should take over.
 - Context cancellation flows through to HTTP requests (Ctrl+C works).
 - 30-second default timeout per execution.
 
@@ -152,7 +180,10 @@ When modifying the system prompt, be direct and explicit — especially for smal
 ## Key Conventions
 
 - **stdout is sacred**: Only `write_stdout` tool writes to stdout. All debug/UI → stderr.
-- **Sandbox is the boundary**: CWD is read-only; workspace + memories are read-write. Network access, writes to CWD, paths outside, and env reads require user approval. No shell access. `require()` available for CommonJS modules.
+- **Sandbox is the boundary**: CWD is read-only; lib + tmp + memories are read-write. Network access, writes to CWD, paths outside, and env reads require user approval. No shell access. `require()` available for CommonJS modules.
+- **memory.js runs first**: Before calling the agent, try to run memory.js. If it succeeds, done. If it fails or calls `agent.resume()`, the agent takes over.
+- **Convergence goal**: The agent should write/improve memory.js so it eventually handles everything without agent intervention.
+- **policy.json is untouchable**: The agent can never modify policy.json — this prevents privilege escalation.
 - **Provider interface**: Agent loop is decoupled from any specific LLM SDK.
 - **Keep primitives simple**: Small, focused tools that stack on each other. Don't over-architect.
 - **`think` is the interpreter**, **`thought` is the management tool**. Scripts are `.thought` files, shebangs are `#!/usr/bin/env think`.
@@ -188,9 +219,11 @@ Home dir: `~/.thinkingscript/` (overridable via `THINKINGSCRIPT_HOME`).
   bin/                     # Installed thought binaries (added to PATH)
   thoughts/
     <name>/
-      policy.json          # Per-thought policy (overrides global)
-      workspace/           # Per-thought working directory
+      memory.js            # Static script (runs first, no agent if it works)
+      lib/                 # Persistent modules memory.js can require()
+      tmp/                 # Scratch space (downloads, temp files)
       memories/            # Per-thought persistent memories
+      policy.json          # Per-thought policy (agent cannot modify)
   cache/<hash>/            # Fingerprint-gated, per-script-path
     fingerprint
 ```

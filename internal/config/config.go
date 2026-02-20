@@ -100,9 +100,22 @@ func ThoughtDir(scriptPath string) string {
 	return filepath.Join(HomeDir(), "thoughts", ThoughtName(scriptPath))
 }
 
-// WorkspaceDir returns the workspace directory for a given script.
-func WorkspaceDir(scriptPath string) string {
-	return filepath.Join(ThoughtDir(scriptPath), "workspace")
+// LibDir returns the lib directory for a given script.
+// This is where persistent modules live that memory.js can require().
+func LibDir(scriptPath string) string {
+	return filepath.Join(ThoughtDir(scriptPath), "lib")
+}
+
+// TmpDir returns the tmp directory for a given script.
+// This is scratch space for downloads, temp data, etc.
+func TmpDir(scriptPath string) string {
+	return filepath.Join(ThoughtDir(scriptPath), "tmp")
+}
+
+// MemoryJSPath returns the path to memory.js for a given script.
+// This is the static script that runs first before calling the agent.
+func MemoryJSPath(scriptPath string) string {
+	return filepath.Join(ThoughtDir(scriptPath), "memory.js")
 }
 
 // MemoriesDir returns the memories directory for a given script.

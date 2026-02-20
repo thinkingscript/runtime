@@ -28,13 +28,13 @@ type Registry struct {
 	order []string
 }
 
-func NewRegistry(approver *approval.Approver, workDir, workspaceDir, memoriesDir, scriptName string) *Registry {
+func NewRegistry(approver *approval.Approver, workDir, thoughtDir, libDir, tmpDir, memoriesDir, memoryJSPath, scriptName string) *Registry {
 	r := &Registry{
 		regs: make(map[string]registration),
 	}
 
 	r.registerStdio()
-	r.registerScript(approver, workDir, workspaceDir, memoriesDir, scriptName)
+	r.registerScript(approver, workDir, thoughtDir, libDir, tmpDir, memoriesDir, memoryJSPath, scriptName)
 
 	return r
 }

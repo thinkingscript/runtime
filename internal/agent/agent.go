@@ -95,16 +95,112 @@ it appears in the user message after "Stdin:". If command-line arguments were
 passed, they appear after "Arguments:". If neither section is present, nothing
 was piped and no arguments were given — do NOT try to read stdin.
 
-## Workspace
+## Directories
 
-Your workspace directory is: %s
+- lib: %s — persistent modules you can require()
+- tmp: %s — scratch space for downloads, temp files
+- memories: %s — text memories (loaded below)
 
-This is YOUR private storage — it persists between runs of the same
-script. You MUST use this directory for ALL files you create: caches,
-downloads, temp files, intermediate results, everything. NEVER write
-files to the current working directory unless the script explicitly
-asks you to create output files there. The working directory belongs
-to the user, not to you.%s
+Use lib/ and tmp/ for ALL files you create. NEVER write to the current
+working directory unless the script explicitly asks you to create output
+files there. The working directory belongs to the user, not to you.
+
+## memory.js
+
+Your memory.js location is: %s
+
+**Your goal is to make this thought self-sufficient by writing memory.js.**
+
+When this thought runs:
+1. If memory.js exists, it runs first WITHOUT calling you
+2. If memory.js succeeds, execution ends (you're never called)
+3. If memory.js fails or calls agent.resume(context), you take over
+
+### Strategy: Incremental Convergence
+
+Not all tasks are the same. Adapt your approach:
+
+**Simple tasks** (e.g., "print hello world", "get weather for a city"):
+Write a complete memory.js that handles everything. After one run,
+the thought should be fully self-sufficient.
+
+**Complex tasks** (e.g., "build a web scraper", "analyze this codebase"):
+Work incrementally. Write a partial memory.js that handles what you've
+figured out, and calls agent.resume() for parts that need more work:
+
+  // memory.js for a complex task
+  var config = fs.exists("lib/config.json")
+    ? JSON.parse(fs.readFile("lib/config.json"))
+    : null;
+
+  if (!config) {
+    agent.resume("need to discover API endpoints first");
+  }
+
+  // ... use config to do work ...
+
+  if (someEdgeCase) {
+    agent.resume("encountered new case: " + details);
+  }
+
+Each time you're called, improve memory.js to handle more cases.
+The context passed to agent.resume() tells you what's needed.
+
+**When NOT to write memory.js**:
+- One-off exploratory tasks ("what files are in this directory?")
+- Tasks that are inherently dynamic each run
+- When the user explicitly asks you NOT to remember
+
+### Handling Variable Inputs
+
+Thoughts receive input from multiple sources. Your memory.js must
+handle these dynamically — never hardcode values from when you wrote it:
+
+**Command-line arguments** (process.args):
+  var city = process.args[0] || "San Francisco";
+  // think weather.md "NYC" → process.args = ["NYC"]
+
+**Environment variables** (env.get):
+  var apiKey = env.get("API_KEY");
+  // User will be prompted for approval on first access
+
+**Stdin** (piped data):
+  // IMPORTANT: Stdin is NOT available in memory.js!
+  // Stdin is captured before memory.js runs and only appears in the
+  // agent prompt. For stdin-heavy thoughts, memory.js should call:
+  agent.resume("need to process stdin: " + description);
+  // Then you (the agent) handle the stdin data from the prompt.
+
+**Files** (fs.readFile):
+  var config = JSON.parse(fs.readFile("config.json"));
+  // Read dynamic data from files the user provides
+
+When writing memory.js, think about what varies between runs:
+- If only arguments change → use process.args
+- If stdin is the main input → delegate to agent.resume()
+- If env vars are needed → use env.get() (approval required)
+- If reading user files → use fs.readFile()
+
+### Writing memory.js
+
+Use fs.writeFile with the memory.js path shown above.
+
+memory.js has access to all bridges:
+- fs, net, env, sys, console, process
+- agent.resume(context) — transfer control back to you
+- require(path) — load CommonJS modules from lib/
+
+The context string you pass to agent.resume() is critical — it's the
+only information you'll receive about what went wrong. Be specific:
+- BAD:  agent.resume("error")
+- GOOD: agent.resume("API returned 401, may need new auth token")
+
+### Convergence
+
+The ideal end state: memory.js handles all cases and never calls you.
+But this is a goal, not a requirement. Some thoughts may always need
+occasional agent intervention for edge cases — that's fine. Focus on
+handling the common cases efficiently.%s
 
 ## Rules
 
@@ -163,12 +259,16 @@ type Agent struct {
 	maxTokens     int
 	maxIterations int
 	scriptName    string
-	workspaceDir  string
+	thoughtDir    string
+	libDir        string
+	tmpDir        string
 	memoriesDir   string
+	memoryJSPath  string
 	cacheMode     string
+	resumeContext string
 }
 
-func New(p provider.Provider, r *tools.Registry, model string, maxTokens, maxIterations int, scriptName, workspaceDir, memoriesDir, cacheMode string) *Agent {
+func New(p provider.Provider, r *tools.Registry, model string, maxTokens, maxIterations int, scriptName, thoughtDir, libDir, tmpDir, memoriesDir, memoryJSPath, cacheMode, resumeContext string) *Agent {
 	return &Agent{
 		provider:      p,
 		registry:      r,
@@ -176,9 +276,13 @@ func New(p provider.Provider, r *tools.Registry, model string, maxTokens, maxIte
 		maxTokens:     maxTokens,
 		maxIterations: maxIterations,
 		scriptName:    scriptName,
-		workspaceDir:  workspaceDir,
+		thoughtDir:    thoughtDir,
+		libDir:        libDir,
+		tmpDir:        tmpDir,
 		memoriesDir:   memoriesDir,
+		memoryJSPath:  memoryJSPath,
 		cacheMode:     cacheMode,
+		resumeContext: resumeContext,
 	}
 }
 
@@ -210,8 +314,36 @@ func (a *Agent) loadMemories() string {
 }
 
 func (a *Agent) Run(ctx context.Context, prompt string) error {
+	// Include resume context if memory.js failed or doesn't exist
+	fullPrompt := prompt
+	if a.resumeContext != "" {
+		fullPrompt += "\n\n## Resume Context\n\n"
+
+		if a.resumeContext == "no memory.js exists, first run" {
+			// First run - no memory.js yet
+			fullPrompt += "This is the first run — no memory.js exists yet.\n\n"
+			fullPrompt += "Read the thought above and accomplish the task. Then write memory.js "
+			fullPrompt += "so future runs can handle this without calling you. For simple tasks, "
+			fullPrompt += "write a complete solution. For complex tasks, write what you can and "
+			fullPrompt += "use agent.resume() for parts that need more work."
+		} else if strings.HasPrefix(a.resumeContext, "memory.js error:") {
+			// Runtime error in memory.js
+			fullPrompt += "memory.js threw an error:\n\n"
+			fullPrompt += strings.TrimPrefix(a.resumeContext, "memory.js error: ")
+			fullPrompt += "\n\nFix the bug in memory.js. Read the current memory.js, understand "
+			fullPrompt += "what went wrong, and write a corrected version."
+		} else {
+			// Explicit agent.resume() call with context
+			fullPrompt += "memory.js called agent.resume() with this context:\n\n"
+			fullPrompt += a.resumeContext
+			fullPrompt += "\n\nThis tells you what memory.js couldn't handle. Combine this with "
+			fullPrompt += "the original thought above to understand what's needed. Solve the "
+			fullPrompt += "problem, then update memory.js to handle this case in the future."
+		}
+	}
+
 	messages := []provider.Message{
-		provider.NewUserMessage(provider.NewTextBlock(prompt)),
+		provider.NewUserMessage(provider.NewTextBlock(fullPrompt)),
 	}
 
 	for i := 0; i < a.maxIterations; i++ {
@@ -226,7 +358,7 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 		}
 		resp, err := a.provider.Chat(ctx, provider.ChatParams{
 			Model:     a.model,
-			System:    fmt.Sprintf(systemPromptTemplate, a.workspaceDir, memories),
+			System:    fmt.Sprintf(systemPromptTemplate, a.libDir, a.tmpDir, a.memoriesDir, a.memoryJSPath, memories),
 			Messages:  messages,
 			Tools:     a.registry.Definitions(),
 			MaxTokens: a.maxTokens,

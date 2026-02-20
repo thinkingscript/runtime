@@ -19,10 +19,10 @@ type runScriptInput struct {
 	Code string `json:"code"`
 }
 
-func (r *Registry) registerScript(approver *approval.Approver, workDir, workspaceDir, memoriesDir, scriptName string) {
+func (r *Registry) registerScript(approver *approval.Approver, workDir, thoughtDir, libDir, tmpDir, memoriesDir, memoryJSPath, scriptName string) {
 	r.register(provider.ToolDefinition{
 		Name:        "run_script",
-		Description: "Execute JavaScript code in a sandboxed runtime. Has access to the filesystem (current directory and workspace freely; other paths require user approval), HTTP, environment variables, and system info. Use this for all tasks: file I/O, data processing, HTTP requests, and transformations.",
+		Description: "Execute JavaScript code in a sandboxed runtime. Has access to the filesystem (current directory read-only; lib, tmp, and memories read-write; memory.js read-write; other paths require user approval), HTTP, environment variables, and system info. Use this for all tasks: file I/O, data processing, HTTP requests, and transformations.",
 		InputSchema: provider.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]any{
@@ -43,14 +43,19 @@ func (r *Registry) registerScript(approver *approval.Approver, workDir, workspac
 		dotStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("213"))
 		detailStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
 
+		// SECURITY: Carefully control what paths are writable.
+		// - lib, tmp, memories directories are writable
+		// - memory.js is writable as an EXACT file match
+		// - thoughtDir is readable but NOT writable (protects policy.json)
+		// - Other paths go through ApprovePath
 		sb, err := sandbox.New(sandbox.Config{
-			AllowedPaths:  []string{workDir, workspaceDir, memoriesDir},
-			WritablePaths: []string{workspaceDir, memoriesDir},
+			AllowedPaths:  []string{workDir, thoughtDir, libDir, tmpDir, memoriesDir},
+			WritablePaths: []string{libDir, tmpDir, memoriesDir, memoryJSPath},
 			WorkDir:       workDir,
-			Stderr:       os.Stderr,
-			ApprovePath:  approver.ApprovePath,
-			ApproveEnv:   approver.ApproveEnvRead,
-			ApproveNet:   approver.ApproveNet,
+			Stderr:        os.Stderr,
+			ApprovePath:   approver.ApprovePath,
+			ApproveEnv:    approver.ApproveEnvRead,
+			ApproveNet:    approver.ApproveNet,
 			OnWrite: func(path, content string) {
 				if strings.HasPrefix(path, memoriesPrefix) {
 					name := filepath.Base(path)
