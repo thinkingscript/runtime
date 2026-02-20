@@ -1,38 +1,32 @@
-# agent-exec
+# thinkingscript
 
 A shebang interpreter for natural language scripts. Write what you want in plain English, make it executable, and run it.
 
 ```
-#!/usr/bin/env agent-exec
+#!/usr/bin/env think
 Print "hello world" and exit
 ```
 
 ```bash
-chmod +x hello.ai
-./hello.ai
+chmod +x hello.thought
+./hello.thought
 # => hello world
 ```
 
-agent-exec sends your script's text to an LLM, which uses tools (shell commands, stdout, stdin, env vars) to accomplish the task. Output goes to stdout, debug goes to stderr — so scripts are fully pipeable.
+`think` sends your script to an LLM, which executes JavaScript in a sandboxed runtime to accomplish the task. Output goes to stdout, debug goes to stderr — scripts are fully pipeable.
 
 ## Quick Start
 
-1. **Install**
+1. **Build**
 
 ```bash
-go install github.com/bradgessler/agent-exec@latest
+make build
 ```
 
 2. **Set up your API key**
 
 ```bash
-mkdir -p ~/.agent-exec/agents
-cat > ~/.agent-exec/agents/anthropic.yaml << 'EOF'
-version: 1
-provider: anthropic
-api_key: sk-ant-your-key-here
-model: claude-sonnet-4-5-20250929
-EOF
+./bin/thought setup
 ```
 
 Or set the environment variable:
@@ -41,43 +35,33 @@ Or set the environment variable:
 export THINKINGSCRIPT__ANTHROPIC__API_KEY=sk-ant-...
 ```
 
-3. **Write a script**
+3. **Run a script**
 
 ```bash
-cat > hello.ai << 'EOF'
-#!/usr/bin/env agent-exec
-Print "hello world" and exit
-EOF
-chmod +x hello.ai
-```
-
-4. **Run it**
-
-```bash
-./hello.ai
+./bin/think examples/weather.md "San Francisco"
 ```
 
 You can also run thoughts directly from a URL:
 
 ```bash
-think https://raw.githubusercontent.com/thinkingscript/thoughts/main/weather.md "NYC"
+./bin/think https://example.com/weather.thought "NYC"
 ```
 
 When running from a URL, `think` displays the thought content and asks for confirmation before executing.
 
 ## The Shebang
 
-The first line `#!/usr/bin/env agent-exec` tells your OS to use agent-exec as the interpreter. Everything after the shebang (minus optional frontmatter) becomes the prompt sent to the LLM.
+The first line `#!/usr/bin/env think` tells your OS to use think as the interpreter. Everything after the shebang (minus optional frontmatter) becomes the prompt sent to the LLM.
 
 ## Frontmatter
 
 Scripts can include optional YAML frontmatter between `---` delimiters to configure behavior:
 
 ```
-#!/usr/bin/env agent-exec
+#!/usr/bin/env think
 ---
-agent: local
-model: llama3
+agent: anthropic
+model: claude-haiku-4-5-20251001
 max_tokens: 8192
 ---
 
@@ -103,7 +87,7 @@ ENV vars use `THINKINGSCRIPT__` prefix with `__` as separator:
 | ENV var | Description | Example |
 |---------|-------------|---------|
 | `THINKINGSCRIPT__AGENT` | Agent to use | `anthropic` |
-| `THINKINGSCRIPT__MODEL` | Model override | `claude-opus-4-6` |
+| `THINKINGSCRIPT__MODEL` | Model override | `claude-opus-4-20250514` |
 | `THINKINGSCRIPT__MAX_TOKENS` | Max tokens | `8192` |
 | `THINKINGSCRIPT__ANTHROPIC__API_KEY` | Anthropic API key | `sk-ant-...` |
 | `THINKINGSCRIPT__OPENAI__API_KEY` | OpenAI API key | `sk-...` |
@@ -111,90 +95,85 @@ ENV vars use `THINKINGSCRIPT__` prefix with `__` as separator:
 | `THINKINGSCRIPT__CACHE` | Cache mode (see below) | `off` |
 | `THINKINGSCRIPT_HOME` | Override home directory | `~/.mythinkingscript` |
 
-#### Cache modes (`THINKINGSCRIPT__CACHE`)
-
-Controls how per-script cache (approvals, scratch notes) is managed between runs. Note that caches are automatically invalidated when either the script content or the `think` binary changes — so upgrading `think` or editing a script always starts fresh.
-
-| Mode | Description |
-|------|-------------|
-| `persist` (default) | Cache survives between runs. Scratch notes accumulate so scripts improve over time. |
-| `ephemeral` | Cache works during the run but is wiped on exit. Useful for one-off runs where you don't want stale notes influencing behavior. |
-| `off` | No cache at all. Cache is wiped before and after the run, and scratch notes instructions are removed from the system prompt. |
-
-```bash
-# Fresh run, no notes influencing behavior
-THINKINGSCRIPT__CACHE=off think examples/images.md
-
-# Cache works during the run but doesn't persist
-THINKINGSCRIPT__CACHE=ephemeral think examples/weather.md
-```
+Note: `THINKINGSCRIPT_HOME` uses a single underscore (it's a path, not a config override).
 
 ### 2. Script Frontmatter
 
 See [Frontmatter](#frontmatter) above.
 
-### 3. Home Folder (`~/.agent-exec/`)
+### 3. Home Folder (`~/.thinkingscript/`)
 
 ```
-~/.agent-exec/
-├── config.yaml          # Global settings
+~/.thinkingscript/
+├── config.json           # Global settings
+├── policy.json           # Global default policy
 ├── agents/
-│   ├── anthropic.yaml   # Anthropic agent definition
-│   └── local.yaml       # Local/Ollama agent definition
-└── cache/
-    └── <fingerprint>/   # Per-script cache (content-addressed)
-        ├── fingerprint
-        ├── approvals.json
-        └── meta.json
+│   └── anthropic.json    # Anthropic agent definition
+├── bin/                  # Installed thought binaries
+├── thoughts/
+│   └── <name>/
+│       ├── policy.json   # Per-thought policy
+│       ├── workspace/    # Per-thought working directory
+│       └── memories/     # Per-thought persistent memories
+└── cache/<fingerprint>/  # Per-script cache (content-addressed)
+    └── fingerprint
 ```
 
-**`config.yaml`** — Global defaults:
+**`config.json`** — Global defaults:
 
-```yaml
-version: 1
-agent: anthropic
-max_tokens: 4096
-max_iterations: 50
+```json
+{
+  "version": 1,
+  "agent": "anthropic",
+  "max_tokens": 4096,
+  "max_iterations": 50
+}
 ```
 
-**`agents/anthropic.yaml`** — Agent definition:
+**`agents/anthropic.json`** — Agent definition:
 
-```yaml
-version: 1
-provider: anthropic
-api_key: sk-ant-...
-model: claude-sonnet-4-5-20250929
-```
-
-**`agents/local.yaml`** — Ollama (speaks OpenAI protocol):
-
-```yaml
-version: 1
-provider: openai
-api_base: http://localhost:11434/v1
-api_key: ollama
-model: llama3
+```json
+{
+  "version": 1,
+  "provider": "anthropic",
+  "api_key": "sk-ant-...",
+  "model": "claude-sonnet-4-5-20250929"
+}
 ```
 
 ## Tools
 
-The LLM has four tools available:
+The LLM has two tools available:
 
-| Tool | Description | Approval Required |
-|------|-------------|:-:|
-| `write_stdout` | Write text to stdout | No |
-| `read_stdin` | Read piped stdin data | No |
-| `run_command` | Execute shell command (`sh -c`) | Yes |
-| `read_env` | Read an environment variable | Yes |
+| Tool | Description |
+|------|-------------|
+| `write_stdout` | Write text to stdout (the only way to produce output) |
+| `run_script` | Execute JavaScript in a sandboxed runtime |
 
 The LLM's text responses go to stderr (debug). Only `write_stdout` produces actual output.
 
-## Approval System
+## Sandbox
 
-When the LLM wants to access something sensitive (network, env vars, files outside the workspace), a prompt appears:
+The `run_script` tool executes JavaScript in a sandboxed [goja](https://github.com/dop251/goja) runtime with these globals:
+
+| Global | Description |
+|--------|-------------|
+| `fs.readFile`, `fs.writeFile`, `fs.readDir`, etc. | Filesystem access |
+| `net.fetch(url, options?)` | HTTP requests |
+| `env.get(name)` | Read environment variables |
+| `sys.platform()`, `sys.arch()`, `sys.cpus()`, etc. | System info |
+| `console.log`, `console.error` | Debug output (to stderr) |
+| `process.cwd()`, `process.args`, `process.exit(code)` | Process info |
+| `require(path)` | CommonJS module loading |
+
+All JS is synchronous — no async/await/Promises.
+
+## Policy System
+
+When the LLM wants to access something sensitive, a prompt appears:
 
 ```
-  ◆ NET  network access
+  ◆ NET  api.github.com
       ❯ Once     allow this time
         Session  allow all this run
         Always   save to policy
@@ -203,38 +182,113 @@ When the LLM wants to access something sensitive (network, env vars, files outsi
 
 - **Once**: allow this specific action, this run only
 - **Session**: allow all actions of this type for the rest of this run
-- **Always**: persist the decision to the thought's `policy.yaml`
+- **Always**: persist the decision to the thought's `policy.json`
 - **Deny**: reject the action; the LLM adapts and tries another approach
 - **Non-interactive**: all sensitive actions are denied by default (safe for CI/pipes)
 
-## Piping
+### Policy Files
 
-stdout is sacred — only `write_stdout` tool output goes there. This means scripts compose naturally with Unix pipes:
+Policies are JSON files that control what a thought can access:
+
+```json
+{
+  "version": 1,
+  "paths": {
+    "default": "prompt",
+    "entries": [
+      {"path": "/Users/brad/projects", "mode": "rwd", "approval": "allow"}
+    ]
+  },
+  "env": {
+    "default": "prompt",
+    "entries": [
+      {"name": "HOME", "approval": "allow"},
+      {"name": "AWS_*", "approval": "deny"}
+    ]
+  },
+  "net": {
+    "hosts": {
+      "default": "prompt",
+      "entries": [
+        {"host": "*.github.com", "approval": "allow"}
+      ]
+    },
+    "listen": {
+      "default": "deny",
+      "entries": []
+    }
+  }
+}
+```
+
+**Path modes:** `r` (read/list), `w` (write), `d` (delete). Combined like chmod: `rwd` for full access.
+
+**Wildcards:** Env names support suffix wildcards (`AWS_*`). Hosts support prefix wildcards (`*.github.com`).
+
+### Default Permissions
+
+On first run, a thought automatically gets:
+- **Workspace** (`~/.thinkingscript/thoughts/<name>/workspace/`): `rwd`
+- **Memories** (`~/.thinkingscript/thoughts/<name>/memories/`): `rwd`
+- **CWD**: `r` (read-only)
+
+### Managing Policies
 
 ```bash
-# Pipe data through an AI script
-cat data.csv | ./summarize.ai > summary.txt
+# List policy for a thought
+thought policy list weather
 
-# Chain scripts
-./generate-report.ai | ./format-output.ai
+# Add entries
+thought policy add path weather /Users/brad/data --mode rwd
+thought policy add env weather HOME
+thought policy add host weather "*.github.com"
+
+# Remove entries
+thought policy remove path weather /Users/brad/data
+thought policy remove env weather HOME
+thought policy remove host weather "*.github.com"
+
+# List global policy
+thought policy list
+```
+
+## Cache Modes
+
+Controls how per-script cache is managed between runs. Caches are automatically invalidated when either the script content or the `think` binary changes.
+
+| Mode | Description |
+|------|-------------|
+| `persist` (default) | Cache survives between runs |
+| `ephemeral` | Cache works during the run but is wiped on exit |
+| `off` | No cache at all |
+
+```bash
+THINKINGSCRIPT__CACHE=off think examples/weather.md "NYC"
 ```
 
 ## Cache Management
 
-Each script gets a cache directory keyed by its content fingerprint. This means the same script content produces the same cache whether run from a local file or a URL. The cache is automatically invalidated when script content or the `think` binary changes.
-
 ```bash
 # Print cache directory for a script
-thought cache ./hello.ai
-
-# List cache contents
-ls $(thought cache ./hello.ai)
+thought cache ./hello.thought
 
 # Clear cache for a specific script
-thought cache --clear ./hello.ai
+thought cache --clear ./hello.thought
 
 # Clear all caches
 thought cache --clear-all
+```
+
+## Piping
+
+stdout is sacred — only `write_stdout` tool output goes there. Scripts compose naturally with Unix pipes:
+
+```bash
+# Pipe data through an AI script
+cat data.csv | ./summarize.thought > summary.txt
+
+# Chain scripts
+./generate-report.thought | ./format-output.thought
 ```
 
 ## Examples
@@ -242,39 +296,47 @@ thought cache --clear-all
 ### Hello World
 
 ```
-#!/usr/bin/env agent-exec
+#!/usr/bin/env think
 Print "hello world" and exit
 ```
 
-### Process Piped Input
+### Fetch Weather
 
 ```
-#!/usr/bin/env agent-exec
-Read stdin, count the number of lines, and print the count.
+#!/usr/bin/env think
+Fetch the current weather for the city provided as an argument.
+Print a brief summary including temperature and conditions.
 ```
 
 ```bash
-cat /etc/hosts | ./count-lines.ai
+./weather.thought "San Francisco"
 ```
 
-### Run Commands
+### Process JSON
 
 ```
-#!/usr/bin/env agent-exec
-List all .go files in the current directory, then count them and print
-"Found N Go files" where N is the count.
+#!/usr/bin/env think
+Read stdin as JSON, extract all "name" fields, and print them one per line.
 ```
 
-### Use Environment Variables
-
-```
-#!/usr/bin/env agent-exec
-Read the HOME environment variable and print the path.
+```bash
+cat users.json | ./extract-names.thought
 ```
 
-### Run Commands with Approval
+### File Operations
 
 ```
-#!/usr/bin/env agent-exec
-Run "uname -a" and print the output.
+#!/usr/bin/env think
+List all .go files in the current directory, count them,
+and print "Found N Go files" where N is the count.
+```
+
+## Building Standalone Binaries
+
+```bash
+# Build a thought into a standalone binary
+thought build weather.thought -o weather
+
+# Install to ~/.thinkingscript/bin/
+thought install weather.thought
 ```

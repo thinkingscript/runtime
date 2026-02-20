@@ -34,7 +34,7 @@ cmd/thought/cache.go     → `thought cache` subcommand
 cmd/thought/build.go     → `thought build` subcommand
 internal/agent/          → Core agent loop (provider-agnostic)
 internal/provider/       → Provider interface + Anthropic adapter
-internal/config/         → Home dir, config.yaml, agents, fingerprinting
+internal/config/         → Home dir, config.json, agents, fingerprinting
 internal/script/         → Script parser (shebang + frontmatter + prompt)
 internal/tools/          → Tool registry + implementations (stdio, script)
 internal/sandbox/        → Sandboxed JS runtime (goja) with fs/net/env/sys bridges
@@ -86,25 +86,62 @@ Key details:
 ### Approval System
 
 Three approval flows in `approval.go`:
-- **`ApproveNet`** — for network access (`net.fetch`)
-- **`ApprovePath`** — for filesystem access outside CWD/workspace
-- **`ApproveEnvRead`** — for environment variable reads
+- **`ApproveNet(host)`** — for network access to specific hosts
+- **`ApprovePath(op, path)`** — for filesystem access (op is "read", "write", or "delete")
+- **`ApproveEnvRead(name)`** — for environment variable reads
 
-All follow the same pattern: thought policy → global policy → prompt with Yes/Allow all/Always/No options.
+Order of checks: global protected entries → thought policy → global policy → prompt.
 
-Policies are YAML files:
-- `~/.thinkingscript/policy.yaml` — global defaults (read-only)
-- `~/.thinkingscript/thoughts/<name>/policy.yaml` — per-thought overrides (read-write, answers saved here)
+Policies are JSON files:
+- `~/.thinkingscript/policy.json` — global defaults (read-only)
+- `~/.thinkingscript/thoughts/<name>/policy.json` — per-thought overrides (read-write)
 
-```yaml
-net: allow
-env:
-  ANTHROPIC_API_KEY: allow
-paths:
-  /Users/brad/data: allow
+```json
+{
+  "version": 1,
+  "paths": {
+    "default": "prompt",
+    "entries": [
+      {"path": "/Users/brad/projects", "mode": "rwd", "approval": "allow", "source": "prompt"},
+      {"path": "/etc", "mode": "r", "approval": "allow", "source": "config"}
+    ],
+    "protected": []
+  },
+  "env": {
+    "default": "prompt",
+    "entries": [
+      {"name": "HOME", "approval": "allow", "source": "config"},
+      {"name": "AWS_*", "approval": "deny", "source": "config"}
+    ]
+  },
+  "net": {
+    "hosts": {
+      "default": "prompt",
+      "entries": [
+        {"host": "*.github.com", "approval": "allow", "source": "prompt"}
+      ]
+    },
+    "listen": {
+      "default": "deny",
+      "entries": []
+    }
+  }
+}
 ```
 
-Values are `allow` or `deny`. Absent keys mean "not decided yet" → prompt user at runtime.
+**Path modes:** `r` (read/list), `w` (write), `d` (delete). Combined like chmod: `rwd` for full access.
+
+**Approval values:** `allow`, `deny`, `prompt`. Default is `prompt` for most things, `deny` for listen.
+
+**Sources:** `default` (auto-generated), `prompt` (user answered), `config` (manually edited), `cli` (via `thought policy` command).
+
+**Wildcards:** Env names support suffix wildcards (`AWS_*`). Hosts support prefix wildcards (`*.github.com`).
+
+**Protected entries:** Global policy can have `protected` path entries that thought policies cannot override.
+
+**Security:** Thoughts cannot modify their own `policy.json` — hardcoded deny.
+
+**Bootstrap:** On first run, workspace/memories get `rwd` and CWD gets `r` with `source: default`.
 
 ### System Prompt (internal/agent/agent.go)
 
@@ -145,18 +182,17 @@ Home dir: `~/.thinkingscript/` (overridable via `THINKINGSCRIPT_HOME`).
 
 ```
 ~/.thinkingscript/
-  config.yaml              # Global settings (agent, max_tokens, max_iterations)
-  policy.yaml              # Global default policy (net, env, paths)
-  agents/                  # Provider configs (anthropic.yaml, local.yaml, etc.)
+  config.json              # Global settings (agent, max_tokens, max_iterations)
+  policy.json              # Global default policy (net, env, paths)
+  agents/                  # Provider configs (anthropic.json, local.json, etc.)
   bin/                     # Installed thought binaries (added to PATH)
   thoughts/
     <name>/
-      policy.yaml          # Per-thought policy (overrides global)
+      policy.json          # Per-thought policy (overrides global)
       workspace/           # Per-thought working directory
       memories/            # Per-thought persistent memories
   cache/<hash>/            # Fingerprint-gated, per-script-path
     fingerprint
-    meta.yaml
 ```
 
 ### Environment Variables
@@ -185,4 +221,26 @@ Note: `THINKINGSCRIPT_HOME` uses a single underscore (it's not a config override
 - `github.com/charmbracelet/huh` — TUI confirmation prompts
 - `github.com/charmbracelet/lipgloss` — Styled terminal output
 - `golang.org/x/term` — PTY detection
-- `gopkg.in/yaml.v3` — YAML parsing
+- `gopkg.in/yaml.v3` — YAML parsing (frontmatter only)
+
+## Policy Management
+
+Use `thought policy` to manage policy entries:
+
+```bash
+# List policy for a thought
+thought policy list weather
+
+# Add entries
+thought policy add path weather /Users/brad/data --mode rwd
+thought policy add env weather HOME
+thought policy add host weather "*.github.com"
+
+# Remove entries
+thought policy remove path weather /Users/brad/data
+thought policy remove env weather HOME
+thought policy remove host weather "*.github.com"
+
+# List global policy
+thought policy list
+```
