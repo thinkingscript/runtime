@@ -53,6 +53,7 @@ func (r *Registry) registerScript(approver *approval.Approver, workDir, thoughtD
 			WritablePaths: []string{workspaceDir, memoriesDir, memoryJSPath},
 			WorkDir:       workDir,
 			Stderr:        os.Stderr,
+			Timeout:       0, // Disable timeout - user can Ctrl+C, and approval prompts would race with timer
 			ApprovePath:   approver.ApprovePath,
 			ApproveEnv:    approver.ApproveEnvRead,
 			ApproveNet:    approver.ApproveNet,
