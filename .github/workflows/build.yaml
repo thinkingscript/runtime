@@ -46,5 +46,6 @@ jobs:
           git push -f origin edge
           gh release create edge dist/*.tar.gz dist/*.zip \
             --prerelease \
+            --draft=false \
             --title "Edge" \
             --notes "Built from main at $(git rev-parse --short HEAD). Not a stable release."
