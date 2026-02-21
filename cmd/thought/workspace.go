@@ -3,49 +3,38 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"runtime"
+	"path/filepath"
 
-	"github.com/thinkingscript/cli/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/thinkingscript/cli/internal/config"
 )
 
-var workspaceOpenFlag bool
-
-var workspaceCmd = &cobra.Command{
-	Use:          "workspace <script>",
-	Aliases:      []string{"ws"},
-	Short:        "Show or open a thought's directory (workspace/, memories/, memory.js)",
+var pathCmd = &cobra.Command{
+	Use:          "path <thought>",
+	Aliases:      []string{"dir"},
+	Short:        "Print the path to a thought's directory",
+	Long:         "Print the path to a thought's data directory containing workspace/, memories/, and memory.js.\nAccepts an installed thought name, local file path, or URL.",
 	Args:         cobra.ExactArgs(1),
-	RunE:         runWorkspace,
+	RunE:         runPath,
 	SilenceUsage: true,
 }
 
-func init() {
-	workspaceCmd.Flags().BoolVar(&workspaceOpenFlag, "open", false, "Open the thought directory in Finder/file manager")
-}
+func runPath(cmd *cobra.Command, args []string) error {
+	resolved, err := ResolveThought(args[0], "path")
+	if err != nil {
+		return err
+	}
 
-func runWorkspace(cmd *cobra.Command, args []string) error {
-	scriptPath := args[0]
-	thoughtDir := config.ThoughtDir(scriptPath)
+	var thoughtDir string
+	if resolved.Target == TargetInstalled {
+		thoughtDir = filepath.Join(config.HomeDir(), "thoughts", resolved.Name)
+	} else {
+		thoughtDir = config.ThoughtDir(resolved.Path)
+	}
+
 	if _, err := os.Stat(thoughtDir); os.IsNotExist(err) {
 		fmt.Fprintln(os.Stderr, "No thought data yet.")
-		return nil
 	}
-
-	if workspaceOpenFlag {
-		var open string
-		switch runtime.GOOS {
-		case "darwin":
-			open = "open"
-		case "linux":
-			open = "xdg-open"
-		default:
-			return fmt.Errorf("open not supported on %s", runtime.GOOS)
-		}
-		return exec.Command(open, thoughtDir).Run()
-	}
-
 	fmt.Println(thoughtDir)
 	return nil
 }

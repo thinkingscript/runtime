@@ -16,7 +16,7 @@ var (
 )
 
 var resetCmd = &cobra.Command{
-	Use:   "reset <name|file>",
+	Use:   "reset <thought>",
 	Short: "Reset a thought's state",
 	Long: `Reset a thought's memory.js and workspace/ directory.
 
@@ -27,6 +27,8 @@ By default, this command removes:
 Use --memories to also clear the memories/ directory.
 Use --policy to also reset policy.json to defaults.
 Use --all to clear everything.
+
+Accepts an installed thought name, local file path, or URL.
 
 Examples:
   thought reset weather          # Reset installed thought
@@ -49,8 +51,15 @@ func runReset(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	name := resolved.Name
-	thoughtDir := filepath.Join(config.HomeDir(), "thoughts", name)
+	var thoughtDir string
+	var name string
+	if resolved.Target == TargetInstalled {
+		name = resolved.Name
+		thoughtDir = filepath.Join(config.HomeDir(), "thoughts", name)
+	} else {
+		name = args[0]
+		thoughtDir = config.ThoughtDir(resolved.Path)
+	}
 
 	// Check if thought directory exists
 	if _, err := os.Stat(thoughtDir); os.IsNotExist(err) {
