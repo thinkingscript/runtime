@@ -8,20 +8,21 @@ import (
 )
 
 var catCmd = &cobra.Command{
-	Use:          "cat <name>",
+	Use:          "cat <name|file|url>",
 	Short:        "Display a thought's script content",
-	Long:         "Print the embedded script content of an installed thought.",
+	Long:         "Print the script content of an installed thought, local file, or URL.",
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCat,
 	SilenceUsage: true,
 }
 
 func runCat(cmd *cobra.Command, args []string) error {
-	resolved, err := ResolveThought(args[0], "show")
+	resolved, err := ResolveThought(args[0], "cat")
 	if err != nil {
 		return err
 	}
 
+	// For local files, suggest using cat directly
 	if resolved.Target == TargetFile {
 		return fmt.Errorf("'%s' is a file. Use 'cat %s' directly.", args[0], args[0])
 	}

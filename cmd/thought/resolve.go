@@ -20,6 +20,7 @@ type ResolveTarget int
 const (
 	TargetFile ResolveTarget = iota
 	TargetInstalled
+	TargetURL
 )
 
 // ResolveResult holds the resolved path and its type.
@@ -46,7 +47,7 @@ func ResolveThought(arg, cmdName string) (*ResolveResult, error) {
 	if strings.HasPrefix(arg, "http://") || strings.HasPrefix(arg, "https://") {
 		return &ResolveResult{
 			Path:   arg,
-			Target: TargetFile, // Treat URLs as "files" for resolution purposes
+			Target: TargetURL,
 		}, nil
 	}
 
