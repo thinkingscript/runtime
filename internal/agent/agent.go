@@ -41,8 +41,22 @@ input you need (stdin, arguments) is already in the user message.
   IMPORTANT: This is NOT Node.js. There are no Node.js built-in modules
   (no "fs", "path", "http", etc). ONLY the globals listed below exist.
   However, require() IS available for loading CommonJS modules from the
-  filesystem — if you need an npm package, download it with net.fetch
-  and save it to workspace, then require() it.
+  filesystem.
+
+  To use npm packages, fetch them from esm.sh (a CDN that bundles dependencies):
+
+    // Fetch and save to workspace (do this once)
+    var libPath = "<WORKSPACE>/lib/lodash.js";
+    if (!fs.exists(libPath)) {
+      fs.mkdir("<WORKSPACE>/lib");
+      var resp = net.fetch("https://esm.sh/lodash@4.17.21?cjs&bundle");
+      fs.writeFile(libPath, resp.body);
+    }
+    var _ = require(libPath);
+
+  Use ?cjs for CommonJS format (required for require()), ?bundle to include
+  all dependencies. Not all packages work — those requiring Node.js built-ins
+  or native modules won't work. Prefer packages that work in browsers.
 
   Filesystem access to the current working directory and workspace
   is unrestricted. Accessing paths outside these directories (e.g. the
@@ -161,6 +175,11 @@ figured out, and calls agent.resume() for parts that need more work:
 Each time you're called, improve memory.js to handle more cases.
 The context passed to agent.resume() tells you what's needed.
 
+**Don't get rigid.** If memory.js was written for single inputs but the
+user now passes multiple, update it. If it assumed one format but gets
+another, adapt. Read the existing memory.js, understand what it does,
+then expand it — don't just patch the immediate failure.
+
 **When NOT to write memory.js**:
 - One-off exploratory tasks ("what files are in this directory?")
 - Tasks that are inherently dynamic each run
@@ -169,11 +188,52 @@ The context passed to agent.resume() tells you what's needed.
 ### Handling Variable Inputs
 
 Thoughts receive input from multiple sources. Your memory.js must
-handle these dynamically — never hardcode values from when you wrote it:
+handle these dynamically — never hardcode values from when you wrote it.
+
+**IMPORTANT: Design for flexibility, not rigidity.**
+
+1. **Handle varying argument counts**: Iterate over ALL of process.args,
+   not just [0]. Users may pass one input or ten.
+
+2. **Inspect input shape**: Before processing, check what you received.
+   Is it a zip code (/^\d{5}$/)? An airport code (3 letters)? A city name?
+   Route to appropriate handlers based on pattern, not assumptions.
+
+3. **Call agent.resume() for unknowns**: When memory.js encounters input
+   it doesn't recognize, don't fail silently. Call agent.resume() with
+   context so you can expand the logic:
+     if (!canHandle(input)) {
+       agent.resume("Unknown input format: " + input + " (expected city, zip, or airport code)");
+     }
+
+4. **Evolve, don't patch**: When called to fix a failure, read the existing
+   memory.js and expand its capabilities — don't just hardcode the one
+   case that failed.
 
 **Command-line arguments** (process.args):
+  // WRONG - assumes single argument, single format:
   var city = process.args[0] || "San Francisco";
-  // think weather.md "NYC" → process.args = ["NYC"]
+
+  // RIGHT - handles multiple args, inspects each:
+  var inputs = process.args.length > 0 ? process.args : [null];
+  var results = [];
+  for (var i = 0; i < inputs.length; i++) {
+    var input = inputs[i];
+    var result;
+    if (!input) {
+      result = autoDetect();
+    } else if (/^\d{5}$/.test(input)) {
+      result = lookupZipCode(input);
+    } else if (/^[A-Z]{3}$/i.test(input)) {
+      result = lookupAirport(input);
+    } else {
+      result = lookupCity(input);
+    }
+    if (result.error) {
+      agent.resume("Can't handle: " + input + " - " + result.error);
+    }
+    results.push(result);
+  }
 
 **Environment variables** (env.get):
   var apiKey = env.get("API_KEY");
