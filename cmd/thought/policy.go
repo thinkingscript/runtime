@@ -19,18 +19,19 @@ var policyCmd = &cobra.Command{
 }
 
 var policyListCmd = &cobra.Command{
-	Use:          "list [thought-name]",
+	Use:          "ls [name]",
+	Aliases:      []string{"list"},
 	Short:        "List policy entries",
-	Long:         "List all policy entries for a thought. If no thought name is provided, lists the global policy.",
+	Long:         "List all policy entries for an installed thought.\nIf no name is provided, lists the global policy.",
 	Args:         cobra.MaximumNArgs(1),
 	RunE:         runPolicyList,
 	SilenceUsage: true,
 }
 
 var policyAddCmd = &cobra.Command{
-	Use:   "add <type> <thought-name> <value>",
+	Use:   "add <type> <name> <value>",
 	Short: "Add a policy entry",
-	Long: `Add a policy entry. Type must be 'path', 'env', or 'host'.
+	Long: `Add a policy entry for an installed thought. Type must be 'path', 'env', or 'host'.
 
 Examples:
   thought policy add path myapp /Users/brad/data --mode rwd
@@ -42,14 +43,15 @@ Examples:
 }
 
 var policyRemoveCmd = &cobra.Command{
-	Use:   "remove <type> <thought-name> <value>",
+	Use:   "rm <type> <name> <value>",
+	Aliases: []string{"remove"},
 	Short: "Remove a policy entry",
-	Long: `Remove a policy entry. Type must be 'path', 'env', or 'host'.
+	Long: `Remove a policy entry from an installed thought. Type must be 'path', 'env', or 'host'.
 
 Examples:
-  thought policy remove path myapp /Users/brad/data
-  thought policy remove env myapp HOME
-  thought policy remove host myapp "*.github.com"`,
+  thought policy rm path myapp /Users/brad/data
+  thought policy rm env myapp HOME
+  thought policy rm host myapp "*.github.com"`,
 	Args:         cobra.ExactArgs(3),
 	RunE:         runPolicyRemove,
 	SilenceUsage: true,

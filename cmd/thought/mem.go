@@ -16,8 +16,9 @@ var memoryCmd = &cobra.Command{
 }
 
 var memoryLsCmd = &cobra.Command{
-	Use:          "ls [script]",
-	Short:        "List memories for a script, or all scripts",
+	Use:          "ls [thought]",
+	Short:        "List memories for a thought, or all thoughts",
+	Long:         "List memory files for an installed thought, local file, or URL.\nWith no argument, lists all memories across all thoughts.",
 	Args:         cobra.MaximumNArgs(1),
 	RunE:         runMemoryLs,
 	SilenceUsage: true,
@@ -70,8 +71,19 @@ func listAllMemories() error {
 	return nil
 }
 
-func listScriptMemories(scriptPath string) error {
-	memoriesDir := config.MemoriesDir(scriptPath)
+func listScriptMemories(arg string) error {
+	resolved, err := ResolveThought(arg, "memory ls")
+	if err != nil {
+		return err
+	}
+
+	var memoriesDir string
+	if resolved.Target == TargetInstalled {
+		memoriesDir = filepath.Join(config.HomeDir(), "thoughts", resolved.Name, "memories")
+	} else {
+		memoriesDir = config.MemoriesDir(resolved.Path)
+	}
+
 	entries, err := os.ReadDir(memoriesDir)
 	if err != nil {
 		if os.IsNotExist(err) {
