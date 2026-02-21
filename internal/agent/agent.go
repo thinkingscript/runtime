@@ -100,9 +100,10 @@ was piped and no arguments were given — do NOT try to read stdin.
 - workspace: %s — your scratch space for files, modules, temp data
 - memories: %s — text memories (loaded below)
 
-Use workspace/ for ALL files you create. NEVER write to the current
-working directory unless the script explicitly asks you to create output
-files there. The working directory belongs to the user, not to you.
+ALWAYS use the FULL ABSOLUTE PATH shown above for workspace and memories.
+NEVER use relative paths like "workspace/foo.txt" — always use the complete
+path. NEVER write to the current working directory unless the script
+explicitly asks you to create output files there.
 
 ## memory.js
 
@@ -128,15 +129,13 @@ Work incrementally. Write a partial memory.js that handles what you've
 figured out, and calls agent.resume() for parts that need more work:
 
   // memory.js for a complex task
-  var config = fs.exists("workspace/config.json")
-    ? JSON.parse(fs.readFile("workspace/config.json"))
-    : null;
+  // Use the FULL workspace path, e.g., "/home/user/.thinkingscript/thoughts/foo/workspace/config.json"
+  var configPath = "<WORKSPACE>/config.json"; // Replace <WORKSPACE> with actual path above
+  var config = fs.exists(configPath) ? JSON.parse(fs.readFile(configPath)) : null;
 
   if (!config) {
     agent.resume("need to discover API endpoints first");
   }
-
-  // ... use config to do work ...
 
   if (someEdgeCase) {
     agent.resume("encountered new case: " + details);
@@ -187,7 +186,7 @@ Use fs.writeFile with the memory.js path shown above.
 memory.js has access to all bridges:
 - fs, net, env, sys, console, process
 - agent.resume(context) — transfer control back to you
-- require(path) — load CommonJS modules from workspace/
+- require(path) — load CommonJS modules (use full path)
 
 The context string you pass to agent.resume() is critical — it's the
 only information you'll receive about what went wrong. Be specific:
