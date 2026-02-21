@@ -455,12 +455,18 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 		provider.NewUserMessage(provider.NewTextBlock(fullPrompt)),
 	}
 
+	// Show agent starting
+	agentStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("213"))
+	nameStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
+	labelStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
+	fmt.Fprintf(os.Stderr, "%s %s %s\n", agentStyle.Render("●"), nameStyle.Render(a.scriptName), labelStyle.Render("agent"))
+
 	for i := 0; i < a.maxIterations; i++ {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 
-		stopSpinner := ui.Spinner("Thinking...")
+		stopSpinner := ui.Spinner("  Thinking...")
 		memories := ""
 		if a.cacheMode == "persist" {
 			memories = fmt.Sprintf(memoriesPrompt, a.memoriesDir, a.loadMemories())
@@ -505,7 +511,7 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 			if displayName == "run_script" {
 				displayName = "script"
 			}
-			fmt.Fprintf(os.Stderr, "\n%s %s %s\n", toolStyle.Render("●"), a.scriptName, debugStyle.Render(displayName))
+			fmt.Fprintf(os.Stderr, "  %s %s\n", toolStyle.Render("●"), debugStyle.Render(displayName))
 			printToolInput(tu.ToolName, tu.Input)
 
 			result, err := a.registry.Execute(ctx, tu.ToolName, tu.Input)
@@ -513,7 +519,7 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 				if ctx.Err() != nil || errors.Is(err, approval.ErrInterrupted) {
 					return err
 				}
-				fmt.Fprintf(os.Stderr, "  %s %s\n", errorStyle.Render("error:"), err.Error())
+				fmt.Fprintf(os.Stderr, "    %s %s\n", errorStyle.Render("error:"), err.Error())
 				resultBlocks = append(resultBlocks, provider.NewToolResultBlock(tu.ToolUseID, err.Error(), true))
 			} else {
 				resultBlocks = append(resultBlocks, provider.NewToolResultBlock(tu.ToolUseID, result, false))
@@ -547,6 +553,6 @@ func printToolInput(toolName string, input json.RawMessage) {
 	}
 
 	for _, line := range strings.Split(fields.Code, "\n") {
-		fmt.Fprintf(os.Stderr, "  %s\n", codeStyle.Render(line))
+		fmt.Fprintf(os.Stderr, "    %s\n", codeStyle.Render(line))
 	}
 }

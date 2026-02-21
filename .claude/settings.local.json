@@ -49,7 +49,21 @@
       "Bash(bundle install:*)",
       "Bash(GOTOOLCHAIN=auto make build:*)",
       "Bash(bundle exec rake:*)",
-      "Bash(make test:*)"
+      "Bash(make test:*)",
+      "Bash(GOTOOLCHAIN=auto go mod tidy:*)",
+      "Bash(./bin/think:*)",
+      "Bash(source .env)",
+      "Bash(set -a)",
+      "Bash(set +a)",
+      "Bash(time ./bin/think:*)",
+      "Bash(timeout 30 ./bin/think:*)",
+      "Bash(gh release edit:*)",
+      "Bash(for cmd in bin build cache cat digest info install ls memory open path policy reset rm run setup)",
+      "Bash(do echo \"=== $cmd ===\")",
+      "Bash(done)",
+      "Bash(THINKINGSCRIPT_HOME=./home ./bin/thought memory ls:*)",
+      "Bash(gh run:*)",
+      "Bash(gh run list:*)"
     ]
   }
 }
