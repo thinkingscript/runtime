@@ -40,7 +40,7 @@ func (r *Registry) registerScript(approver *approval.Approver, workDir, thoughtD
 		}
 
 		memoriesPrefix := memoriesDir + string(filepath.Separator)
-		dotStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("213"))
+		dotStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("39")) // Cyan for script actions
 		detailStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
 
 		// SECURITY: Carefully control what paths are writable.
@@ -60,7 +60,7 @@ func (r *Registry) registerScript(approver *approval.Approver, workDir, thoughtD
 			OnWrite: func(path, content string) {
 				if strings.HasPrefix(path, memoriesPrefix) {
 					name := filepath.Base(path)
-					fmt.Fprintf(os.Stderr, "\n%s %s %s\n\n", dotStyle.Render("●"), scriptName, detailStyle.Render("memorizing "+name))
+					fmt.Fprintf(os.Stderr, "\n  %s %s\n\n", dotStyle.Render("▸"), detailStyle.Render("memorizing "+name)) // Triangle for script actions
 					for _, line := range strings.Split(strings.TrimSpace(content), "\n") {
 						fmt.Fprintf(os.Stderr, "  %s\n", detailStyle.Render(line))
 					}

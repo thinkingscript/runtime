@@ -456,10 +456,10 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 	}
 
 	// Show agent starting
-	agentStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("213"))
+	agentStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("213")) // Magenta for agent
 	nameStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
 	labelStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
-	fmt.Fprintf(os.Stderr, "%s %s %s\n", agentStyle.Render("●"), nameStyle.Render(a.scriptName), labelStyle.Render("agent"))
+	fmt.Fprintf(os.Stderr, "%s %s %s\n", agentStyle.Render("●"), nameStyle.Render(a.scriptName), labelStyle.Render("agent")) // Circle for agent
 
 	for i := 0; i < a.maxIterations; i++ {
 		if ctx.Err() != nil {
@@ -511,7 +511,7 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 			if displayName == "run_script" {
 				displayName = "script"
 			}
-			fmt.Fprintf(os.Stderr, "  %s %s\n", toolStyle.Render("●"), debugStyle.Render(displayName))
+			fmt.Fprintf(os.Stderr, "  %s %s\n", toolStyle.Render("▸"), debugStyle.Render(displayName)) // Triangle for scripts
 			printToolInput(tu.ToolName, tu.Input)
 
 			result, err := a.registry.Execute(ctx, tu.ToolName, tu.Input)

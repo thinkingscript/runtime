@@ -149,10 +149,10 @@ func runScript(cmd *cobra.Command, args []string) error {
 			} else {
 				// Show memory.js execution
 				scriptName := config.ThoughtName(scriptPath)
-				dotStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("213"))
+				dotStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("82")) // Green for memory.js
 				nameStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
 				fileStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
-				fmt.Fprintf(os.Stderr, "%s %s %s\n", dotStyle.Render("●"), nameStyle.Render(scriptName), fileStyle.Render("memory.js"))
+				fmt.Fprintf(os.Stderr, "%s %s %s\n", dotStyle.Render("■"), nameStyle.Render(scriptName), fileStyle.Render("memory.js"))
 
 				stopSpinner := ui.Spinner("Working...")
 				result, err := sb.Run(cmd.Context(), string(code))
