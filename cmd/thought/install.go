@@ -13,7 +13,7 @@ import (
 
 var installCmd = &cobra.Command{
 	Use:          "install <script>",
-	Short:        "Build and install a script to the bin directory",
+	Short:        "Build and install a thought to the bin directory",
 	Long:         "Builds a script with shebang and executable permissions, then installs it to ~/.thinkingscript/bin/. Add that directory to your PATH to run scripts by name.",
 	Args:         cobra.ExactArgs(1),
 	RunE:         runInstall,

@@ -9,7 +9,7 @@ import (
 
 var catCmd = &cobra.Command{
 	Use:          "cat <name|file|url>",
-	Short:        "Display a thought's script content",
+	Short:        "Display a thought's content",
 	Long:         "Print the script content of an installed thought, local file, or URL.",
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCat,

@@ -17,7 +17,7 @@ var (
 
 var cacheCmd = &cobra.Command{
 	Use:          "cache [thought]",
-	Short:        "Manage per-script cache directories",
+	Short:        "Manage thought cache directories",
 	Long:         "Print or clear cache directories used to store approval decisions and script metadata.\nAccepts an installed thought name, local file path, or URL.",
 	Args:         cobra.MaximumNArgs(1),
 	RunE:         runCache,

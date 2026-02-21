@@ -12,7 +12,7 @@ import (
 var memoryCmd = &cobra.Command{
 	Use:     "memory",
 	Aliases: []string{"mem"},
-	Short:   "Manage script memories",
+	Short:   "Manage thought memories",
 }
 
 var memoryLsCmd = &cobra.Command{
