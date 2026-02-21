@@ -58,8 +58,7 @@ The goal is **convergence**: thoughts should evolve toward static `memory.js` th
 ```
 ~/.thinkingscript/thoughts/<name>/
 ├── memory.js       # Static script (runs first, no agent needed if it works)
-├── lib/            # Persistent modules memory.js can require()
-├── tmp/            # Scratch space for downloads, temp files
+├── workspace/      # Agent's scratch space (modules, temp files, caches)
 ├── memories/       # Text memories (injected into agent prompt)
 └── policy.json     # Approval policy (agent CANNOT modify this)
 ```
@@ -69,13 +68,13 @@ The goal is **convergence**: thoughts should evolve toward static `memory.js` th
 Everything is wired in `runScript()`:
 1. `approval.NewApprover(thoughtDir, globalPolicyPath)` — policy-based approval system
 2. Try memory.js via sandbox — if success, done; if error/resume, continue to agent
-3. `tools.NewRegistry(approver, workDir, thoughtDir, libDir, tmpDir, memoriesDir)` — tool registry
+3. `tools.NewRegistry(approver, workDir, thoughtDir, workspaceDir, memoriesDir, memoryJSPath, scriptPath)` — tool registry
 
 Stdin data and CLI arguments are injected directly into the prompt (no tool call needed).
 
 ### Security Model: The Sandbox Boundary
 
-**The sandbox (goja JS runtime) is the security boundary.** CWD is read-only — reads are unrestricted but writes to CWD require user approval. lib/, tmp/, and memories/ directories are fully read-write. memory.js is read-write. Accessing paths outside these directories prompts the user for approval. Environment variable reads prompt the user for approval. Network access requires user approval. There is no shell access — system introspection (CPU, memory, uptime, load) is provided through the `sys` bridge.
+**The sandbox (goja JS runtime) is the security boundary.** CWD is read-only — reads are unrestricted but writes to CWD require user approval. workspace/ and memories/ directories are fully read-write. memory.js is read-write. Accessing paths outside these directories prompts the user for approval. Environment variable reads prompt the user for approval. Network access requires user approval. There is no shell access — system introspection (CPU, memory, uptime, load) is provided through the `sys` bridge.
 
 **policy.json is always denied** — the agent cannot modify its own privileges.
 
@@ -95,7 +94,7 @@ Tools: `write_stdout`, `run_script`.
 ### Sandbox (internal/sandbox/)
 
 The JS runtime uses `github.com/dop251/goja` (pure Go, no CGo) with `goja_nodejs` for CommonJS `require()` support. Bridge files:
-- `bridge_fs.go` — `fs.readFile`, `fs.writeFile`, `fs.appendFile`, `fs.readDir`, `fs.stat`, `fs.exists`, `fs.delete`, `fs.mkdir`, `fs.copy`, `fs.move`, `fs.glob` (CWD read-only; lib + tmp + memories read-write; other paths prompt for approval)
+- `bridge_fs.go` — `fs.readFile`, `fs.writeFile`, `fs.appendFile`, `fs.readDir`, `fs.stat`, `fs.exists`, `fs.delete`, `fs.mkdir`, `fs.copy`, `fs.move`, `fs.glob` (CWD read-only; workspace + memories read-write; other paths prompt for approval)
 - `bridge_net.go` — `net.fetch(url, options?)` (requires user approval)
 - `bridge_env.go` — `env.get(name)` (prompts user for approval)
 - `bridge_sys.go` — `sys.platform()`, `sys.arch()`, `sys.cpus()`, `sys.totalmem()`, `sys.freemem()`, `sys.uptime()`, `sys.loadavg()` (system introspection)
@@ -109,7 +108,7 @@ Key details:
 - Errors use `throwError()` for clean messages (no Go stack traces leaking to the LLM).
 - `agent.resume(context)` triggers a `ResumeError` that signals the agent should take over.
 - Context cancellation flows through to HTTP requests (Ctrl+C works).
-- 30-second default timeout per execution.
+- No timeout for interactive runs (user can Ctrl+C); 30-second default for non-interactive.
 
 ### Approval System
 
@@ -180,7 +179,7 @@ When modifying the system prompt, be direct and explicit — especially for smal
 ## Key Conventions
 
 - **stdout is sacred**: Only `write_stdout` tool writes to stdout. All debug/UI → stderr.
-- **Sandbox is the boundary**: CWD is read-only; lib + tmp + memories are read-write. Network access, writes to CWD, paths outside, and env reads require user approval. No shell access. `require()` available for CommonJS modules.
+- **Sandbox is the boundary**: CWD is read-only; workspace + memories are read-write. Network access, writes to CWD, paths outside, and env reads require user approval. No shell access. `require()` available for CommonJS modules.
 - **memory.js runs first**: Before calling the agent, try to run memory.js. If it succeeds, done. If it fails or calls `agent.resume()`, the agent takes over.
 - **Convergence goal**: The agent should write/improve memory.js so it eventually handles everything without agent intervention.
 - **policy.json is untouchable**: The agent can never modify policy.json — this prevents privilege escalation.
@@ -220,8 +219,7 @@ Home dir: `~/.thinkingscript/` (overridable via `THINKINGSCRIPT_HOME`).
   thoughts/
     <name>/
       memory.js            # Static script (runs first, no agent if it works)
-      lib/                 # Persistent modules memory.js can require()
-      tmp/                 # Scratch space (downloads, temp files)
+      workspace/           # Agent's scratch space (modules, caches, temp files)
       memories/            # Per-thought persistent memories
       policy.json          # Per-thought policy (agent cannot modify)
   cache/<hash>/            # Fingerprint-gated, per-script-path
@@ -251,7 +249,7 @@ Note: `THINKINGSCRIPT_HOME` uses a single underscore (it's not a config override
 - `github.com/anthropics/anthropic-sdk-go` — Anthropic API
 - `github.com/dop251/goja` — Pure-Go JavaScript engine (ES6)
 - `github.com/dop251/goja_nodejs` — CommonJS require() for goja
-- `github.com/charmbracelet/huh` — TUI confirmation prompts
+- `github.com/charmbracelet/bubbletea` — TUI for approval prompts
 - `github.com/charmbracelet/lipgloss` — Styled terminal output
 - `golang.org/x/term` — PTY detection
 - `gopkg.in/yaml.v3` — YAML parsing (frontmatter only)
@@ -276,4 +274,57 @@ thought policy remove host weather "*.github.com"
 
 # List global policy
 thought policy list
+```
+
+## Development Setup
+
+Use direnv for local development. The `.env` file sets up PATH and environment:
+
+```bash
+# .env (loaded by direnv)
+PATH="$PWD/bin:$PATH"
+THINKINGSCRIPT_HOME="./home"
+THINKINGSCRIPT__ANTHROPIC__API_KEY="sk-ant-..."
+```
+
+Make sure direnv is configured to load `.env` files, then:
+
+```bash
+direnv allow
+make build
+think examples/weather.md "NYC"
+```
+
+## Working Style
+
+When collaborating on this codebase:
+
+- **Bias toward action** — Start doing, don't over-plan. Make changes, build, test, iterate.
+- **Small commits** — Commit early and often. Each commit should be focused and pushable.
+- **Short feedback loops** — `make build && make test` frequently. Fix issues as they arise.
+- **YAGNI** — Don't add features "just in case." Add them when needed, remove them when not.
+- **Direct communication** — Short messages are fine. "commit", "ship it", "kill that" are valid instructions.
+- **Trust instincts** — If something feels wrong or overcomplicated, simplify it.
+- **The prompt matters** — The agent system prompt in `internal/agent/agent.go` is critical. Be explicit, show examples, confirm what globals exist.
+
+### Status Indicators
+
+The CLI shows what's happening:
+- `● weather memory.js` — memory.js is running
+- `● weather script` — agent called run_script
+- `⠋ Thinking...` — waiting for LLM response
+- `⠋ Working...` — script executing
+
+### Testing Changes
+
+```bash
+# Build
+make build
+
+# Run tests
+make test
+
+# Test manually
+rm ~/.thinkingscript/thoughts/weather/memory.js  # Clear cached memory.js
+think examples/weather.md "NYC"
 ```
