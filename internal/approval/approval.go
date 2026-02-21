@@ -296,16 +296,19 @@ var (
 	markerStyle  = ui.Renderer.NewStyle().Foreground(amber).Bold(true)
 	opStyle      = ui.Renderer.NewStyle().Foreground(amber).Bold(true)
 	detailStyle  = ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
-	numberStyle  = ui.Renderer.NewStyle().Foreground(amber)
+	numberStyle  = ui.Renderer.NewStyle().Foreground(dimColor)
 	commandStyle = ui.Renderer.NewStyle().Bold(true).Foreground(lipgloss.Color("255"))
-	hintStyle    = ui.Renderer.NewStyle().Foreground(dimColor)
+	hintStyle    = ui.Renderer.NewStyle().Foreground(lipgloss.Color("250"))
 )
 
 // approvalModel is a bubbletea model for the approval prompt
 type approvalModel struct {
+	cursor int
 	choice string
 	done   bool
 }
+
+var choices = []string{"allow", "deny", "once"}
 
 func (m approvalModel) Init() tea.Cmd {
 	return nil
@@ -315,6 +318,18 @@ func (m approvalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(choices)-1 {
+				m.cursor++
+			}
+		case "enter", " ":
+			m.choice = choices[m.cursor]
+			m.done = true
+			return m, tea.Quit
 		case "1":
 			m.choice = "allow"
 			m.done = true
@@ -336,24 +351,45 @@ func (m approvalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+var (
+	selectedStyle   = ui.Renderer.NewStyle().Foreground(amber)
+	unselectedStyle = ui.Renderer.NewStyle().Foreground(dimColor)
+)
+
 func (m approvalModel) View() string {
 	if m.done {
 		return ""
 	}
+
+	type option struct {
+		num  string
+		cmd  string
+		hint string
+	}
+	options := []option{
+		{"1", "Allow", "Save to policy"},
+		{"2", "Deny ", "Save to policy"},
+		{"3", "Once ", "This time only"},
+	}
+
 	var b strings.Builder
 	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("    %s  %s  %s\n",
-		numberStyle.Render("①"),
-		commandStyle.Render("Allow"),
-		hintStyle.Render("save to policy")))
-	b.WriteString(fmt.Sprintf("    %s  %s  %s\n",
-		numberStyle.Render("②"),
-		commandStyle.Render("Deny "),
-		hintStyle.Render("save to policy")))
-	b.WriteString(fmt.Sprintf("    %s  %s  %s\n",
-		numberStyle.Render("③"),
-		commandStyle.Render("Once "),
-		hintStyle.Render("this time only")))
+	for i, opt := range options {
+		if i == m.cursor {
+			// Selected: amber arrow, bright text
+			b.WriteString(fmt.Sprintf("    %s %s  %s  %s\n",
+				selectedStyle.Render("❯"),
+				numberStyle.Render(opt.num),
+				commandStyle.Render(opt.cmd),
+				hintStyle.Render(opt.hint)))
+		} else {
+			// Unselected: dim text
+			b.WriteString(fmt.Sprintf("      %s  %s  %s\n",
+				unselectedStyle.Render(opt.num),
+				unselectedStyle.Render(opt.cmd),
+				unselectedStyle.Render(opt.hint)))
+		}
+	}
 	return b.String()
 }
 
