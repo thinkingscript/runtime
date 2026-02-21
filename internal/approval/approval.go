@@ -307,7 +307,7 @@ type approvalModel struct {
 	done   bool
 }
 
-var choices = []string{"allow", "deny", "once"}
+var choices = []string{"allow", "deny"}
 
 func (m approvalModel) Init() tea.Cmd {
 	return nil
@@ -337,10 +337,6 @@ func (m approvalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.choice = "deny"
 			m.done = true
 			return m, tea.Quit
-		case "3":
-			m.choice = "once"
-			m.done = true
-			return m, tea.Quit
 		case "ctrl+c", "esc":
 			m.choice = ""
 			m.done = true
@@ -367,7 +363,6 @@ func (m approvalModel) View() string {
 	options := []option{
 		{"1", "Allow"},
 		{"2", "Deny"},
-		{"3", "Once"},
 	}
 
 	// Layout: numbers under ◆, commands under NET label
@@ -429,8 +424,6 @@ func (a *Approver) prompt(label, detail string) (promptDecision, error) {
 		return promptAlways, nil
 	case "deny":
 		return promptDeny, nil
-	case "once":
-		return promptOnce, nil
 	default:
 		return promptDeny, nil
 	}
