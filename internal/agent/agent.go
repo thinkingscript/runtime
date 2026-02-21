@@ -455,11 +455,11 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 		provider.NewUserMessage(provider.NewTextBlock(fullPrompt)),
 	}
 
-	// Show agent starting
+	// Show agent starting (blank line for mode switch)
 	agentStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("213")) // Magenta for agent
 	nameStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
 	labelStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
-	fmt.Fprintf(os.Stderr, "%s %s %s\n", agentStyle.Render("●"), nameStyle.Render(a.scriptName), labelStyle.Render("agent")) // Circle for agent
+	fmt.Fprintf(os.Stderr, "\n%s %s %s\n", agentStyle.Render("●"), nameStyle.Render(a.scriptName), labelStyle.Render("agent"))
 
 	for i := 0; i < a.maxIterations; i++ {
 		if ctx.Err() != nil {
