@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/huh"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/thinkingscript/cli/internal/ui"
 	"golang.org/x/term"
@@ -290,34 +290,71 @@ func hasMode(mode, char string) bool {
 
 // Prompt styles
 var (
-	amber     = lipgloss.Color("214")
-	dimColor  = lipgloss.Color("242")
+	amber    = lipgloss.Color("214")
+	dimColor = lipgloss.Color("242")
 
-	markerStyle = ui.Renderer.NewStyle().Foreground(amber).Bold(true)
-	opStyle     = ui.Renderer.NewStyle().Foreground(amber).Bold(true)
-	detailStyle = ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
-	hintStyle   = ui.Renderer.NewStyle().Foreground(dimColor)
+	markerStyle  = ui.Renderer.NewStyle().Foreground(amber).Bold(true)
+	opStyle      = ui.Renderer.NewStyle().Foreground(amber).Bold(true)
+	detailStyle  = ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
+	numberStyle  = ui.Renderer.NewStyle().Foreground(amber)
+	commandStyle = ui.Renderer.NewStyle().Bold(true).Foreground(lipgloss.Color("255"))
+	hintStyle    = ui.Renderer.NewStyle().Foreground(dimColor)
 )
 
-func approvalTheme() *huh.Theme {
-	t := huh.ThemeBase()
-
-	t.Focused.Base = lipgloss.NewStyle().PaddingLeft(4)
-	t.Focused.SelectSelector = lipgloss.NewStyle().Foreground(amber).SetString("❯ ")
-	t.Focused.SelectedOption = lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
-	t.Focused.UnselectedOption = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-
-	t.Blurred.Base = lipgloss.NewStyle().PaddingLeft(4)
-	t.Blurred.SelectSelector = lipgloss.NewStyle().SetString("  ")
-	t.Blurred.SelectedOption = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	t.Blurred.UnselectedOption = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-
-	return t
+// approvalModel is a bubbletea model for the approval prompt
+type approvalModel struct {
+	choice string
+	done   bool
 }
 
-func optionLabel(action, hint string) string {
-	padded := fmt.Sprintf("%-8s", action)
-	return padded + hintStyle.Render(hint)
+func (m approvalModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m approvalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "1":
+			m.choice = "allow"
+			m.done = true
+			return m, tea.Quit
+		case "2":
+			m.choice = "deny"
+			m.done = true
+			return m, tea.Quit
+		case "3":
+			m.choice = "once"
+			m.done = true
+			return m, tea.Quit
+		case "ctrl+c", "esc":
+			m.choice = ""
+			m.done = true
+			return m, tea.Quit
+		}
+	}
+	return m, nil
+}
+
+func (m approvalModel) View() string {
+	if m.done {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf("    %s  %s  %s\n",
+		numberStyle.Render("①"),
+		commandStyle.Render("Allow"),
+		hintStyle.Render("save to policy")))
+	b.WriteString(fmt.Sprintf("    %s  %s  %s\n",
+		numberStyle.Render("②"),
+		commandStyle.Render("Deny "),
+		hintStyle.Render("save to policy")))
+	b.WriteString(fmt.Sprintf("    %s  %s  %s\n",
+		numberStyle.Render("③"),
+		commandStyle.Render("Once "),
+		hintStyle.Render("this time only")))
+	return b.String()
 }
 
 // prompt shows an approval dialog and returns the user's decision.
@@ -333,28 +370,26 @@ func (a *Approver) prompt(label, detail string) (promptDecision, error) {
 		opStyle.Render(strings.ToUpper(label)),
 		detailStyle.Render(truncate(detail, 200)))
 
-	var choice string
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Options(
-					huh.NewOption(optionLabel("Allow", "save to policy"), "allow"),
-					huh.NewOption(optionLabel("Deny", "save to policy"), "deny"),
-					huh.NewOption(optionLabel("Once", "allow this time only"), "once"),
-				).
-				Value(&choice),
-		),
-	).WithTheme(approvalTheme()).WithOutput(os.Stderr)
-
+	// Set up bubbletea options
+	opts := []tea.ProgramOption{
+		tea.WithOutput(os.Stderr),
+	}
 	if a.ttyInput != nil {
-		form = form.WithInput(a.ttyInput)
+		opts = append(opts, tea.WithInput(a.ttyInput))
 	}
 
-	if err := form.Run(); err != nil {
+	p := tea.NewProgram(approvalModel{}, opts...)
+	finalModel, err := p.Run()
+	if err != nil {
+		return promptDeny, err
+	}
+
+	m := finalModel.(approvalModel)
+	if m.choice == "" {
 		os.Exit(130)
 	}
 
-	switch choice {
+	switch m.choice {
 	case "allow":
 		return promptAlways, nil
 	case "deny":
