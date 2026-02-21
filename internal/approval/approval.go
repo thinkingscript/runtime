@@ -298,7 +298,6 @@ var (
 	detailStyle  = ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
 	numberStyle  = ui.Renderer.NewStyle().Foreground(dimColor)
 	commandStyle = ui.Renderer.NewStyle().Bold(true).Foreground(lipgloss.Color("255"))
-	hintStyle    = ui.Renderer.NewStyle().Foreground(lipgloss.Color("250"))
 )
 
 // approvalModel is a bubbletea model for the approval prompt
@@ -362,32 +361,32 @@ func (m approvalModel) View() string {
 	}
 
 	type option struct {
-		num  string
-		cmd  string
-		hint string
+		num string
+		cmd string
 	}
 	options := []option{
-		{"1", "Allow", "Save to policy"},
-		{"2", "Deny ", "Save to policy"},
-		{"3", "Once ", "This time only"},
+		{"1", "Allow"},
+		{"2", "Deny"},
+		{"3", "Once"},
 	}
 
+	// Layout: numbers under ◆, commands under NET label
+	// Header is: "\n  ◆ NET  detail"
+	// Options:   "❯ 1 Allow" or "  2 Deny"
 	var b strings.Builder
 	b.WriteString("\n")
 	for i, opt := range options {
 		if i == m.cursor {
 			// Selected: amber arrow, bright text
-			b.WriteString(fmt.Sprintf("    %s %s  %s  %s\n",
+			b.WriteString(fmt.Sprintf("%s %s %s\n",
 				selectedStyle.Render("❯"),
 				numberStyle.Render(opt.num),
-				commandStyle.Render(opt.cmd),
-				hintStyle.Render(opt.hint)))
+				commandStyle.Render(opt.cmd)))
 		} else {
-			// Unselected: dim text
-			b.WriteString(fmt.Sprintf("      %s  %s  %s\n",
+			// Unselected: dim text, 2-space indent instead of arrow
+			b.WriteString(fmt.Sprintf("  %s %s\n",
 				unselectedStyle.Render(opt.num),
-				unselectedStyle.Render(opt.cmd),
-				unselectedStyle.Render(opt.hint)))
+				unselectedStyle.Render(opt.cmd)))
 		}
 	}
 	return b.String()
