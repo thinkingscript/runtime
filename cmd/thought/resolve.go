@@ -33,14 +33,23 @@ type ResolveResult struct {
 // and the user cannot be prompted (non-interactive).
 var ErrAmbiguous = errors.New("ambiguous target")
 
-// ResolveThought resolves a reference to either a file or installed thought.
-// If both exist and we're in a TTY, prompts user to choose.
+// ResolveThought resolves a reference to either a file, URL, or installed thought.
+// If both file and installed thought exist and we're in a TTY, prompts user to choose.
 // If both exist and not TTY, returns ErrAmbiguous.
 //
 // Resolution rules:
+//   - Starts with "http://" or "https://" → URL (passed through directly)
 //   - Contains "/" or starts with "." → explicit file path (./foo, ../foo, /path/to/foo)
 //   - Otherwise → check both filesystem and installed thoughts
 func ResolveThought(arg, cmdName string) (*ResolveResult, error) {
+	// URL - pass through directly
+	if strings.HasPrefix(arg, "http://") || strings.HasPrefix(arg, "https://") {
+		return &ResolveResult{
+			Path:   arg,
+			Target: TargetFile, // Treat URLs as "files" for resolution purposes
+		}, nil
+	}
+
 	// Explicit path (contains / or starts with .) - treat as file
 	isExplicitFile := strings.Contains(arg, "/") || strings.HasPrefix(arg, ".")
 
