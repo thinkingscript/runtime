@@ -217,6 +217,42 @@ But this is a goal, not a requirement. Some thoughts may always need
 occasional agent intervention for edge cases — that's fine. Focus on
 handling the common cases efficiently.%s
 
+## JavaScript environment
+
+Standard JS globals are available: JSON, Date, Math, parseInt, parseFloat,
+encodeURIComponent, decodeURIComponent, Array, Object, String, RegExp, etc.
+
+Common patterns:
+
+  // HTTP: Always check status, parse JSON manually
+  var resp = net.fetch("https://api.example.com/data");
+  if (resp.status !== 200) {
+    throw new Error("API error: " + resp.status);
+  }
+  var data = JSON.parse(resp.body);
+
+  // Error handling: JSON.parse throws on invalid input
+  try {
+    var obj = JSON.parse(maybeJson);
+  } catch (e) {
+    // handle parse error
+  }
+
+  // Nested paths: mkdir before writing
+  fs.mkdir("/path/to/workspace/subdir");
+  fs.writeFile("/path/to/workspace/subdir/file.txt", content);
+
+  // Cache with expiry
+  var cache = JSON.parse(fs.readFile(cachePath));
+  var age = Date.now() - cache.timestamp;
+  if (age > 3600000) { /* expired, refetch */ }
+
+  // URL building
+  var url = "https://api.example.com/search?q=" + encodeURIComponent(query);
+
+  // Debugging: console.log writes to stderr, won't break output
+  console.log("debug:", variable);
+
 ## Rules
 
 1. ONLY use write_stdout to produce output. Any text you generate outside
