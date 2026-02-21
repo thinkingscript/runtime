@@ -72,7 +72,8 @@ func (r *Registry) registerScript(approver *approval.Approver, workDir, thoughtD
 			return "", fmt.Errorf("creating sandbox: %w", err)
 		}
 
-		stopSpinner := ui.Spinner("Working...")
+		fmt.Fprintln(os.Stderr) // blank line after code
+		stopSpinner := ui.Spinner("Running...")
 		result, err := sb.Run(ctx, args.Code)
 		stopSpinner()
 		if err != nil {
