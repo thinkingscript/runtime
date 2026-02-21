@@ -15,7 +15,7 @@ var workspaceOpenFlag bool
 var workspaceCmd = &cobra.Command{
 	Use:          "workspace <script>",
 	Aliases:      []string{"ws"},
-	Short:        "Show or open a thought's directory (lib, tmp, memory.js, etc.)",
+	Short:        "Show or open a thought's directory (workspace/, memories/, memory.js)",
 	Args:         cobra.ExactArgs(1),
 	RunE:         runWorkspace,
 	SilenceUsage: true,

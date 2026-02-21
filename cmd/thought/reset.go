@@ -38,7 +38,7 @@ Examples:
 }
 
 func init() {
-	resetCmd.Flags().BoolVarP(&resetAllFlag, "all", "a", false, "Reset everything (memory.js, lib, tmp, memories, policy)")
+	resetCmd.Flags().BoolVarP(&resetAllFlag, "all", "a", false, "Reset everything (memory.js, workspace/, memories/, policy.json)")
 	resetCmd.Flags().BoolVar(&resetMemoriesFlag, "memories", false, "Also clear memories/")
 	resetCmd.Flags().BoolVar(&resetPolicyFlag, "policy", false, "Also reset policy.json")
 }
