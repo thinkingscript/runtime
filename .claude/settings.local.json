@@ -47,7 +47,9 @@
       "Bash(GOTOOLCHAIN=auto go test:*)",
       "Bash(GOTOOLCHAIN=auto go vet:*)",
       "Bash(bundle install:*)",
-      "Bash(GOTOOLCHAIN=auto make build:*)"
+      "Bash(GOTOOLCHAIN=auto make build:*)",
+      "Bash(bundle exec rake:*)",
+      "Bash(make test:*)"
     ]
   }
 }

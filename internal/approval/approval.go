@@ -20,10 +20,9 @@ var ErrInterrupted = errors.New("interrupted")
 type promptDecision string
 
 const (
-	promptOnce    promptDecision = "once"    // one-time allow, not persisted
-	promptSession promptDecision = "session" // session-scoped, not persisted
-	promptAlways  promptDecision = "always"  // persist to policy
-	promptDeny    promptDecision = "deny"    // deny (persisted if "always deny")
+	promptOnce   promptDecision = "once"   // one-time allow, not persisted
+	promptAlways promptDecision = "always" // persist allow to policy
+	promptDeny   promptDecision = "deny"   // persist deny to policy
 )
 
 // Approver handles permission checks against policies.
@@ -34,11 +33,6 @@ type Approver struct {
 	globalPolicy     *Policy // read-only
 	isTTY            bool
 	ttyInput         *os.File
-
-	// Session-scoped allows (not persisted)
-	sessionAllowEnv  bool
-	sessionAllowFS   bool
-	sessionAllowNet  bool
 }
 
 // NewApprover creates an Approver that checks policies and prompts for approval.
@@ -77,10 +71,6 @@ func (a *Approver) Close() {
 
 // ApproveNet checks if network access to a specific host is allowed.
 func (a *Approver) ApproveNet(host string) (bool, error) {
-	if a.sessionAllowNet {
-		return true, nil
-	}
-
 	// Check thought policy
 	if entry := a.thoughtPolicy.Net.Hosts.MatchHost(host); entry != nil {
 		if entry.Approval == ApprovalAllow {
@@ -132,11 +122,9 @@ func (a *Approver) ApproveNet(host string) (bool, error) {
 	case promptDeny:
 		a.thoughtPolicy.AddHostEntry(host, ApprovalDeny, SourcePrompt)
 		a.saveThoughtPolicy()
-	case promptSession:
-		a.sessionAllowNet = true
 	}
 
-	return decision == promptAlways || decision == promptOnce || decision == promptSession, nil
+	return decision == promptAlways || decision == promptOnce, nil
 }
 
 // ApprovePath checks if a filesystem operation on a path is allowed.
@@ -162,10 +150,6 @@ func (a *Approver) ApprovePath(op, path string) (bool, error) {
 				return true, nil
 			}
 		}
-	}
-
-	if a.sessionAllowFS {
-		return true, nil
 	}
 
 	// Check thought policy
@@ -223,19 +207,13 @@ func (a *Approver) ApprovePath(op, path string) (bool, error) {
 	case promptDeny:
 		a.thoughtPolicy.AddPathEntry(path, modeChar, ApprovalDeny, SourcePrompt)
 		a.saveThoughtPolicy()
-	case promptSession:
-		a.sessionAllowFS = true
 	}
 
-	return decision == promptAlways || decision == promptOnce || decision == promptSession, nil
+	return decision == promptAlways || decision == promptOnce, nil
 }
 
 // ApproveEnvRead checks if reading an environment variable is allowed.
 func (a *Approver) ApproveEnvRead(varName string) (bool, error) {
-	if a.sessionAllowEnv {
-		return true, nil
-	}
-
 	// Check thought policy
 	if entry := a.thoughtPolicy.Env.MatchEnv(varName); entry != nil {
 		if entry.Approval == ApprovalAllow {
@@ -286,11 +264,9 @@ func (a *Approver) ApproveEnvRead(varName string) (bool, error) {
 	case promptDeny:
 		a.thoughtPolicy.AddEnvEntry(varName, ApprovalDeny, SourcePrompt)
 		a.saveThoughtPolicy()
-	case promptSession:
-		a.sessionAllowEnv = true
 	}
 
-	return decision == promptAlways || decision == promptOnce || decision == promptSession, nil
+	return decision == promptAlways || decision == promptOnce, nil
 }
 
 // opToModeChar converts an operation name to a mode character.
@@ -362,10 +338,9 @@ func (a *Approver) prompt(label, detail string) (promptDecision, error) {
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Options(
-					huh.NewOption(optionLabel("Once", "allow this time"), "once"),
-					huh.NewOption(optionLabel("Session", "allow all this run"), "session"),
-					huh.NewOption(optionLabel("Always", "save to policy"), "always"),
-					huh.NewOption(optionLabel("Deny", "reject"), "deny"),
+					huh.NewOption(optionLabel("Allow", "save to policy"), "allow"),
+					huh.NewOption(optionLabel("Deny", "save to policy"), "deny"),
+					huh.NewOption(optionLabel("Once", "allow this time only"), "once"),
 				).
 				Value(&choice),
 		),
@@ -380,12 +355,12 @@ func (a *Approver) prompt(label, detail string) (promptDecision, error) {
 	}
 
 	switch choice {
+	case "allow":
+		return promptAlways, nil
+	case "deny":
+		return promptDeny, nil
 	case "once":
 		return promptOnce, nil
-	case "session":
-		return promptSession, nil
-	case "always":
-		return promptAlways, nil
 	default:
 		return promptDeny, nil
 	}
