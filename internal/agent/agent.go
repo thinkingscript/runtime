@@ -86,6 +86,23 @@ input you need (stdin, arguments) is already in the user message.
     process.sleep(ms) (pause execution, respects Ctrl+C)
     process.stdout.write(text) (write directly to stdout from JS)
     require(path) → module.exports (CommonJS module loading)
+    agent.resume(context) → signals back to you with a message
+
+  Script composition: Scripts can call agent.resume() to signal back to you.
+  Use this to delegate complex parsing or decisions to a script, then receive
+  the result. Example:
+
+    // You call run_script with:
+    var input = process.args[0];
+    // ... complex parsing logic ...
+    if (foundZip) {
+      agent.resume("zipcode:" + zip);
+    } else {
+      agent.resume("error: could not parse zipcode");
+    }
+
+  You'll receive the message (e.g., "zipcode:94103") and can act on it.
+  This lets you compose scripts that return structured data or request help.
 
 
 ## Input data
