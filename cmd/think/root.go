@@ -170,8 +170,19 @@ func runScript(cmd *cobra.Command, args []string) error {
 				var resumeErr *sandbox.ResumeError
 				if errors.As(err, &resumeErr) {
 					resumeContext = resumeErr.Context
+					// Show resume indicator
+					resumeStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("214"))
+					contextStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
+					if resumeContext != "" {
+						fmt.Fprintf(os.Stderr, "%s %s\n", resumeStyle.Render("↳ resumed:"), contextStyle.Render(resumeContext))
+					} else {
+						fmt.Fprintf(os.Stderr, "%s\n", resumeStyle.Render("↳ resumed"))
+					}
 				} else {
 					resumeContext = fmt.Sprintf("memory.js error: %s", err)
+					// Show error indicator
+					errorStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("196"))
+					fmt.Fprintf(os.Stderr, "%s %s\n", errorStyle.Render("↳ error:"), err.Error())
 				}
 			}
 		}
