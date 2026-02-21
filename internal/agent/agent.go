@@ -441,7 +441,11 @@ func (a *Agent) Run(ctx context.Context, prompt string) error {
 		// Execute each tool call and collect results
 		var resultBlocks []provider.ContentBlock
 		for _, tu := range toolUses {
-			fmt.Fprintf(os.Stderr, "\n%s %s %s\n", toolStyle.Render("●"), a.scriptName, debugStyle.Render(tu.ToolName))
+			displayName := tu.ToolName
+			if displayName == "run_script" {
+				displayName = "script"
+			}
+			fmt.Fprintf(os.Stderr, "\n%s %s %s\n", toolStyle.Render("●"), a.scriptName, debugStyle.Render(displayName))
 			printToolInput(tu.ToolName, tu.Input)
 
 			result, err := a.registry.Execute(ctx, tu.ToolName, tu.Input)

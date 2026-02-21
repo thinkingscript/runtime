@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/spf13/cobra"
 	"github.com/thinkingscript/cli/internal/agent"
 	"github.com/thinkingscript/cli/internal/approval"
 	"github.com/thinkingscript/cli/internal/config"
@@ -16,7 +18,7 @@ import (
 	"github.com/thinkingscript/cli/internal/sandbox"
 	"github.com/thinkingscript/cli/internal/script"
 	"github.com/thinkingscript/cli/internal/tools"
-	"github.com/spf13/cobra"
+	"github.com/thinkingscript/cli/internal/ui"
 	"golang.org/x/term"
 )
 
@@ -145,7 +147,17 @@ func runScript(cmd *cobra.Command, args []string) error {
 			if err != nil {
 				resumeContext = fmt.Sprintf("failed to create sandbox: %s", err)
 			} else {
+				// Show memory.js execution
+				scriptName := config.ThoughtName(scriptPath)
+				dotStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("213"))
+				nameStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("255"))
+				fileStyle := ui.Renderer.NewStyle().Foreground(lipgloss.Color("245"))
+				fmt.Fprintf(os.Stderr, "%s %s %s\n", dotStyle.Render("●"), nameStyle.Render(scriptName), fileStyle.Render("memory.js"))
+
+				stopSpinner := ui.Spinner("Working...")
 				result, err := sb.Run(cmd.Context(), string(code))
+				stopSpinner()
+
 				if err == nil {
 					// Success! memory.js handled everything
 					if result != "" {
