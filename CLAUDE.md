@@ -307,13 +307,37 @@ When collaborating on this codebase:
 - **Trust instincts** — If something feels wrong or overcomplicated, simplify it.
 - **The prompt matters** — The agent system prompt in `internal/agent/agent.go` is critical. Be explicit, show examples, confirm what globals exist.
 
-### Status Indicators
+### Visual Design
 
-The CLI shows what's happening:
-- `● weather memory.js` — memory.js is running
-- `● weather script` — agent called run_script
+The CLI uses a consistent visual language for accessibility and clarity.
+
+**Shapes and Colors** — Each component has a unique shape (for colorblind users) and color:
+
+| Component | Shape | Color | Lipgloss Code |
+|-----------|-------|-------|---------------|
+| memory.js | ■ (square) | Green | `82` |
+| Agent | ● (circle) | Magenta | `213` |
+| Scripts | ▸ (triangle) | Cyan | `39` |
+| Approvals | ◆ (diamond) | Amber | `214` |
+
+**Indentation** — Related items are indented under their parent:
+```
+■ weather memory.js          ← Top-level: memory.js running
+  ↳ resumed: need help       ← Indented: resume context under memory.js
+
+● weather agent              ← Top-level: agent running
+  ⠋ Thinking...              ← Indented: agent status
+  ▸ run_script               ← Indented: tool call under agent
+    var x = ...              ← Double-indent: code under tool
+```
+
+**Spacing** — Blank lines separate mode switches (memory.js → agent).
+
+**Status Indicators:**
 - `⠋ Thinking...` — waiting for LLM response
-- `⠋ Working...` — script executing
+- `⠋ Working...` — sandbox executing
+- `↳ resumed: <context>` — memory.js passed control to agent
+- `↳ error: <message>` — memory.js failed
 
 ### Testing Changes
 
