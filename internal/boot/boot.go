@@ -63,7 +63,7 @@ func TryMemoryJS(ctx context.Context, cfg Config) Result {
 		WorkDir:       cfg.WorkDir,
 		Stderr:        os.Stderr,
 		Args:          cfg.Args,
-		Timeout:       0, // Disable timeout - user can Ctrl+C, and approval prompts would race with timer
+		Timeout:       -1, // Disable timeout - user can Ctrl+C, and approval prompts would race with timer
 		ApprovePath:   cfg.ApprovePath,
 		ApproveEnv:    cfg.ApproveEnv,
 		ApproveNet:    cfg.ApproveNet,

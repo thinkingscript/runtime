@@ -90,9 +90,11 @@ func New(cfg Config) (*Sandbox, error) {
 		}
 	}
 
-	// Apply default timeout if not set
+	// Apply default timeout if not set (negative = no timeout)
 	if cfg.Timeout == 0 {
 		cfg.Timeout = DefaultTimeout
+	} else if cfg.Timeout < 0 {
+		cfg.Timeout = 0 // Disable timeout
 	}
 
 	return &Sandbox{cfg: cfg, allowedPaths: resolved, writablePaths: writable}, nil
