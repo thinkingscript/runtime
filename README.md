@@ -174,16 +174,13 @@ When the LLM wants to access something sensitive, a prompt appears:
 
 ```
   ◆ NET  api.github.com
-      ❯ Once     allow this time
-        Session  allow all this run
-        Always   save to policy
-        Deny     reject
+
+❯ 1 Allow
+  2 Deny
 ```
 
-- **Once**: allow this specific action, this run only
-- **Session**: allow all actions of this type for the rest of this run
-- **Always**: persist the decision to the thought's `policy.json`
-- **Deny**: reject the action; the LLM adapts and tries another approach
+- **Allow**: persist the decision to the thought's `policy.json`
+- **Deny**: reject and save; the LLM adapts and tries another approach
 - **Non-interactive**: all sensitive actions are denied by default (safe for CI/pipes)
 
 ### Policy Files
@@ -236,7 +233,7 @@ On first run, a thought automatically gets:
 
 ```bash
 # List policy for a thought
-thought policy list weather
+thought policy ls weather
 
 # Add entries
 thought policy add path weather /Users/brad/data --mode rwd
@@ -244,12 +241,12 @@ thought policy add env weather HOME
 thought policy add host weather "*.github.com"
 
 # Remove entries
-thought policy remove path weather /Users/brad/data
-thought policy remove env weather HOME
-thought policy remove host weather "*.github.com"
+thought policy rm path weather /Users/brad/data
+thought policy rm env weather HOME
+thought policy rm host weather "*.github.com"
 
 # List global policy
-thought policy list
+thought policy ls
 ```
 
 ## Cache Modes
@@ -354,7 +351,7 @@ thought info weather
 thought run weather "San Francisco"
 
 # Get the path to a thought binary (for scripting)
-thought path weather
+thought bin weather
 
 # Remove a thought (keeps data)
 thought rm weather
