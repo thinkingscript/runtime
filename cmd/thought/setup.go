@@ -90,7 +90,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	configPath := filepath.Join(config.HomeDir(), "agents", "anthropic.json")
 	fmt.Fprintf(os.Stderr, "\n  Config saved to %s\n", configPath)
-	fmt.Fprintf(os.Stderr, "  Try it out: think examples/weather.md \"San Francisco\"\n")
+	fmt.Fprintf(os.Stderr, "  Try it out: think https://thinkingscript.com/hi.txt\n")
 	return nil
 }
 
