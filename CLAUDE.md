@@ -307,6 +307,51 @@ When collaborating on this codebase:
 - **Trust instincts** — If something feels wrong or overcomplicated, simplify it.
 - **The prompt matters** — The agent system prompt in `internal/agent/agent.go` is critical. Be explicit, show examples, confirm what globals exist.
 
+### Cross-Repo Coordination
+
+ThinkingScript spans multiple repos that need to stay in sync:
+
+- **runtime** — CLI binaries (`think`, `thought`)
+- **website** — thinkingscript.com (install.sh, docs, hi.txt)
+- **thoughts** — Community thought collection
+
+When making changes:
+1. Update all affected repos in the same session
+2. Test the full flow: `curl install.sh | sh` → `thought setup` → `think hi.txt`
+3. Check that URLs, file extensions, and command names match everywhere
+4. Push to all repos before considering the change "done"
+
+### End-to-End Testing
+
+Before shipping, test the complete user journey:
+
+```bash
+# Clean slate
+rm -rf ~/.thinkingscript
+
+# Install
+curl -fsSL https://thinkingscript.com/install.sh | sh
+
+# Setup
+thought setup
+
+# First run
+think https://thinkingscript.com/hi.txt
+```
+
+### Website Iteration
+
+The website lives at `../website`. Quick iteration loop:
+
+```bash
+cd ../website
+bundle exec sitepress server  # localhost:5050
+# Make changes, refresh browser
+rake                          # Build and deploy to Fly.io
+```
+
+For mobile testing, use browser dev tools or test on a real device. Common overflow culprits: long URLs in code blocks, tables, hero install command.
+
 ### Visual Design
 
 The CLI uses a consistent visual language for accessibility and clarity.
