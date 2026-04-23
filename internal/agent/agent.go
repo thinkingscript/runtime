@@ -81,6 +81,12 @@ input you need (stdin, arguments) is already in the user message.
     net.fetch(url, options?) → {status, headers, body}
       options: {method, headers, body}
     env.get(name) → string (prompts user for approval)
+    input.prompt(question, options?) → string
+      Ask the user a free-form question and block until they answer.
+      options: {default: string} — returned if the user submits empty.
+      Use this when you need information from the user that was not
+      provided in the initial stdin or arguments. The answer is read
+      from the terminal, not from the agent's input stream.
     sys.platform() → string (e.g. "darwin", "linux")
     sys.arch() → string (e.g. "arm64", "amd64")
     sys.cpus() → number (core count)

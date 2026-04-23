@@ -57,6 +57,7 @@ func (r *Registry) registerScript(approver *approval.Approver, workDir, thoughtD
 			ApprovePath:   approver.ApprovePath,
 			ApproveEnv:    approver.ApproveEnvRead,
 			ApproveNet:    approver.ApproveNet,
+			PromptInput:   approver.PromptInput,
 			OnWrite: func(path, content string) {
 				if strings.HasPrefix(path, memoriesPrefix) {
 					name := filepath.Base(path)

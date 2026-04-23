@@ -1,6 +1,7 @@
 package approval
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -349,6 +350,8 @@ func (m approvalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 var (
 	selectedStyle   = ui.Renderer.NewStyle().Foreground(amber)
 	unselectedStyle = ui.Renderer.NewStyle().Foreground(dimColor)
+	askStyle        = ui.Renderer.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
+	defaultStyle    = ui.Renderer.NewStyle().Foreground(dimColor).Italic(true)
 )
 
 func (m approvalModel) View() string {
@@ -467,6 +470,46 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-3] + "..."
+}
+
+// PromptInput asks the user a free-form question and returns their answer.
+// Returns ErrInterrupted if stdin closes or the TTY is unavailable.
+func (a *Approver) PromptInput(question, defaultValue string) (string, error) {
+	if !a.isTTY {
+		return "", errors.New("no TTY available for input")
+	}
+
+	lock, err := acquirePromptLock()
+	if err != nil {
+		return "", fmt.Errorf("acquiring prompt lock: %w", err)
+	}
+	defer releasePromptLock(lock)
+
+	fmt.Fprintf(os.Stderr, "\n  %s %s  %s\n",
+		markerStyle.Render("◆"),
+		askStyle.Render("ASK"),
+		detailStyle.Render(truncate(question, 500)))
+
+	if defaultValue != "" {
+		fmt.Fprintf(os.Stderr, "  %s\n", defaultStyle.Render("(default: "+defaultValue+")"))
+	}
+	fmt.Fprint(os.Stderr, "  ")
+
+	in := a.ttyInput
+	if in == nil {
+		in = os.Stdin
+	}
+
+	reader := bufio.NewReader(in)
+	line, err := reader.ReadString('\n')
+	if err != nil && line == "" {
+		return "", ErrInterrupted
+	}
+	line = strings.TrimRight(line, "\r\n")
+	if line == "" {
+		line = defaultValue
+	}
+	return line, nil
 }
 
 // BootstrapDefaults adds default policy entries for workspace and memories.

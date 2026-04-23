@@ -36,6 +36,7 @@ type Config struct {
 	ApprovePath   func(op, path string) (bool, error) // Called for paths outside AllowedPaths/WritablePaths; nil = deny all
 	ApproveEnv    func(name string) (bool, error) // Called before reading env vars; nil = allow all
 	ApproveNet    func(host string) (bool, error) // Called before network access; nil = deny all
+	PromptInput   func(question, defaultValue string) (string, error) // Called by input.prompt; nil = no input available
 	OnWrite       func(path, content string)      // Called after successful file writes; nil = no-op
 }
 
@@ -113,6 +114,7 @@ func (s *Sandbox) Run(ctx context.Context, code string) (result string, err erro
 	s.registerProcess(vm)
 	s.registerSys(vm)
 	s.registerAgent(vm)
+	s.registerInput(vm)
 
 	// Enable require() with sandbox-aware source loading
 	registry := require.NewRegistry(
